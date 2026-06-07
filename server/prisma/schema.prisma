@@ -1,0 +1,257 @@
+// Prisma Schema — 君册财税小程序
+// 第一期核心表：users / roles / customers
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+// 角色编码（六种角色）
+enum RoleCode {
+  商务     // 客户主理人/商务岗：谈成交、首次填单提单
+  业务     // 业务岗：办理具体业务、办结打卡
+  会计     // 会计岗：代理户日常维护、完成任务确认
+  主管     // 会计主管/部门主管：发布任务、设时效、评分
+  总务     // 总务岗：资金/合同/发票归属、收费管控
+  管理员   // 管理员/老板：全局查看、审批
+}
+
+// 公司类型
+enum CompanyType {
+  一人公司
+  多股东
+  个体户
+}
+
+// 客户类别
+enum CustomerCategory {
+  新用户
+  代理户
+}
+
+// 客户分层
+enum CustomerTier {
+  VIP
+  优质
+  中低
+  零申报    // 数据库不支持字段名以数字开头，用中文"零"代替"0"
+}
+
+// 客户生命周期阶段
+enum LifecycleStage {
+  填单      // 主理人刚提交
+  办件中    // 对接人正在办理
+  办结      // 办结打卡完成
+  维护中    // 代理户日常维护
+  出库      // 不再服务
+}
+
+// 服务项状态
+enum ItemStatus {
+  待办
+  办件中
+  办结
+}
+
+// 办件状态
+enum WorkOrderStatus {
+  待办     // 刚创建，等对接人开始
+  办件中   // 对接人正在办理
+  办结     // 业务办理完成，但尚未完成系统打卡/归档
+  已打卡   // 已完成系统打卡，且 archiveFiles 已记录
+}
+
+// ---- 角色表 ----
+model Role {
+  id        Int       @id @default(autoincrement())
+  code      RoleCode  @unique      // 角色编码（枚举值）
+  name      String                  // 显示名称，如 "客户主理人"
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt    @map("updated_at")
+
+  users     User[]
+
+  @@map("roles")
+}
+
+// ---- 用户表 ----
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique         // 登录用户名
+  passwordHash String    @map("password_hash")  // bcrypt 哈希
+  realName      String    @map("real_name")      // 真实姓名
+  phone        String?                     // 手机号（可选）
+  roleId       Int       @map("role_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt    @map("updated_at")
+
+  // 关联
+  role         Role      @relation(fields: [roleId], references: [id])
+
+  // 该用户作为主理人的客户列表
+  ownedCustomers Customer[] @relation("Owner")
+
+  // 该用户的已读确认记录
+  templateConfirmations ServiceReadConfirmation[]
+
+  // 该用户被指派的人员配置（四个岗位的反向关系）
+  businessAssignments  StaffAssignment[] @relation("BusinessStaff")
+  accountantAssignments StaffAssignment[] @relation("Accountant")
+  consultantAssignments StaffAssignment[] @relation("Consultant")
+  generalAffairsAssignments StaffAssignment[] @relation("GeneralAffairs")
+
+  // 该用户作为对接人的办件
+  handledWorkOrders    WorkOrder[] @relation("WorkOrderHandler")
+  // 该用户作为回执接收人的办件
+  receiptWorkOrders    WorkOrder[] @relation("WorkOrderReceiptReceiver")
+
+  @@map("users")
+}
+
+// ---- 客户表（企业画像） ----
+model Customer {
+  id               Int              @id @default(autoincrement())
+  companyName      String           @map("company_name")      // 企业名称
+  industry         String?                                    // 行业
+  registerDate     DateTime?        @map("register_date")     // 注册时间
+  taxType          String?          @map("tax_type")          // 税务类型
+  region           String?                                    // 区域
+  annualRevenue    Decimal?         @db.Decimal(12, 2) @map("annual_revenue") // 年流水（金额→Decimal(12,2)，精确到分）
+  staffCount       Int?             @map("staff_count")       // 人员数
+  companyType      CompanyType?     @map("company_type")      // 一人公司/多股东/个体户
+  customerCategory CustomerCategory @map("customer_category") // 新用户/代理户
+  tier             CustomerTier?                              // VIP/优质/中低/零申报
+  lifecycleStage   LifecycleStage   @default(填单) @map("lifecycle_stage") // 生命周期
+
+  // 主理人（商务岗）
+  ownerId          Int              @map("owner_id")
+  owner            User             @relation("Owner", fields: [ownerId], references: [id])
+
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt      @map("updated_at")
+
+  // 该客户的已读确认记录
+  readConfirmations ServiceReadConfirmation[]
+
+  // 该客户的服务项
+  serviceItems     ServiceItem[]
+
+  // 该客户的人员配置
+  staffAssignment  StaffAssignment?
+
+  // 该客户的办件
+  workOrders       WorkOrder[]
+
+  @@map("customers")
+}
+
+// ---- 服务模板表 ----
+model ServiceTemplate {
+  id                Int       @id @default(autoincrement())
+  serviceType       String    @map("service_type")    // 服务类型名称，如 "注册"、"食品证"、"代理记账"
+  requiredMaterials Json?     @map("required_materials") // JSON数组：["营业执照", "法人身份证", ...]
+  processSteps      Json?     @map("process_steps")      // JSON数组：["收集资料", "提交申请", ...]
+  estimatedDuration String?   @map("estimated_duration") // "3-5个工作日"、"视材料齐全情况"
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt      @map("updated_at")
+
+  confirmations     ServiceReadConfirmation[]
+  serviceItems      ServiceItem[]
+
+  @@map("service_templates")
+}
+
+// ---- 已读确认表 ----
+model ServiceReadConfirmation {
+  id              Int       @id @default(autoincrement())
+  customerId      Int       @map("customer_id")
+  serviceItemId   Int?      @map("service_item_id")   // 二期关联具体服务项，一期可空
+  templateId      Int       @map("template_id")
+  userId          Int       @map("user_id")
+  confirmedAt     DateTime  @default(now()) @map("confirmed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  // 关联
+  customer        Customer  @relation(fields: [customerId], references: [id])
+  template        ServiceTemplate @relation(fields: [templateId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
+
+  // 同一个客户 + 同一个模板 + 同一个人，只记录一次已读确认
+  @@unique([customerId, templateId, userId], name: "unique_read_confirmation")
+  @@map("service_read_confirmations")
+}
+
+// ---- 客户服务项表 ----
+model ServiceItem {
+  id                Int              @id @default(autoincrement())
+  customerId        Int              @map("customer_id")
+  serviceTemplateId Int              @map("service_template_id")
+  status            ItemStatus       @default(待办)
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt      @map("updated_at")
+
+  // 关联
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  serviceTemplate   ServiceTemplate  @relation(fields: [serviceTemplateId], references: [id])
+
+  // 办件工单
+  workOrder         WorkOrder?
+
+  // 同一客户 + 同一模板唯一，防止重复添加
+  @@unique([customerId, serviceTemplateId], name: "unique_customer_service_template")
+  @@map("service_items")
+}
+
+// ---- 人员配置表 ----
+model StaffAssignment {
+  id                Int       @id @default(autoincrement())
+  customerId        Int       @unique @map("customer_id") // 一个客户只有一份
+  businessStaffId   Int?      @map("business_staff_id")
+  accountantId      Int?      @map("accountant_id")
+  consultantId      Int?      @map("consultant_id")       // TODO: 客户确认顾问岗是否需要独立账号角色后再补
+  generalAffairsId  Int?      @map("general_affairs_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt      @map("updated_at")
+
+  // 关联
+  customer          Customer  @relation(fields: [customerId], references: [id])
+  businessStaff     User?     @relation("BusinessStaff", fields: [businessStaffId], references: [id])
+  accountant        User?     @relation("Accountant", fields: [accountantId], references: [id])
+  consultant        User?     @relation("Consultant", fields: [consultantId], references: [id])
+  generalAffairs    User?     @relation("GeneralAffairs", fields: [generalAffairsId], references: [id])
+
+  @@map("staff_assignments")
+}
+
+// ---- 办件工单表 ----
+model WorkOrder {
+  id                Int              @id @default(autoincrement())
+  customerId        Int              @map("customer_id")
+  serviceItemId     Int              @unique @map("service_item_id") // MVP: 一个服务项一个办件
+  handlerId         Int?             @map("handler_id")             // 对接人
+  status            WorkOrderStatus  @default(待办)
+  receiptReceiverId Int?             @map("receipt_receiver_id")    // 回执接收人
+  archiveFiles      Json?            @map("archive_files")          // 归档材料：[{name,url,size,uploadedAt}]
+  completedAt       DateTime?        @map("completed_at")           // 办结时间
+  checkedInAt       DateTime?        @map("checked_in_at")          // 打卡时间
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt      @map("updated_at")
+
+  // 关联
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  serviceItem       ServiceItem      @relation(fields: [serviceItemId], references: [id])
+  handler           User?            @relation("WorkOrderHandler", fields: [handlerId], references: [id])
+  receiptReceiver   User?            @relation("WorkOrderReceiptReceiver", fields: [receiptReceiverId], references: [id])
+
+  @@map("work_orders")
+}

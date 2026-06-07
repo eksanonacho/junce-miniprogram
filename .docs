@@ -1,0 +1,540 @@
+# 君册财税小程序 — 开发日志 / 学习手册
+
+> 每完成一步就记录在这里。格式：**做了什么** + **为什么这么做** + **踩了哪些坑** + **怎么验证**。
+
+---
+
+## 2026-06-03 第1步：环境准备
+
+### 做了什么
+检查并安装开发环境：Node.js、pnpm、PostgreSQL、Docker（Colima）。
+
+### 每件工具是干什么的（大白话）
+
+| 工具 | 一句话解释 |
+|------|-----------|
+| **Node.js** | 让电脑能跑 JavaScript（本来只能在浏览器里跑） |
+| **pnpm** | 包管理器。项目需要第三方库时，pnpm 帮你下载和管理 |
+| **PostgreSQL** | 数据库。所有数据（客户、用户、任务等）存在这里 |
+| **Docker (Colima)** | 把应用打包成"集装箱"，到任何服务器都能原样运行 |
+| **Prisma** | 数据库工具。用代码定义表结构，自动生成 SQL，不用手写 |
+| **NestJS CLI** | NestJS 脚手架。一条命令生成模块/控制器/服务文件骨架 |
+
+### 技术选型理由
+- **Colima 代替 Docker Desktop**：Colima 更轻量（无 GUI），适合命令行用户。Docker Desktop 从 Docker 官方下载失败（网络问题）
+- **pnpm 代替 npm**：更快、更省磁盘。用硬链接存储依赖，不会重复下载
+- **Prisma 代替 TypeORM**：Prisma 的 schema 文件直观可读，对新手更友好，migration 全自动
+
+### 踩的坑
+
+**坑1：npm 全局安装权限错误 (EACCES)**
+- 原因：macOS 上 `/usr/local/lib/node_modules` 属于 root，普通用户不能写
+- 解决：`npm config set prefix ~/.npm-global`，把全局包装到用户目录
+- 以后注意：新增终端窗口后要确保 `~/.npm-global/bin` 在 PATH 里（已写入 `.zshrc`）
+
+**坑2：npm 缓存目录有 root 权限文件**
+- 原因：以前用 `sudo npm` 装过包，缓存目录里混杂了 root 的文件
+- 解决：用 `pnpm` 代替 `npm` 和 `npx`。pnpm 有自己的缓存目录，不受影响
+- 根治：有空在终端跑 `sudo chown -R 501:20 "/Users/a1234/.npm"`
+
+**坑3：Docker Desktop 下载 SSL 失败**
+- 原因：brew 下载 Docker.dmg 时 SSL 连接中断（可能与代理/网络有关）
+- 解决：换用 Colima（`brew install colima docker docker-compose`）
+- Colima 启动时自动读取了系统代理设置（Clash 7890端口），证明代理可用
+
+**坑4：Homebrew 下载 GitHub Container Registry 偶发失败**
+- 原因：网络波动，`SSL_ERROR_SYSCALL`
+- 解决：重试即可（第二次成功）
+
+### 怎么确认环境 OK
+```bash
+node --version       # v24.15.0
+pnpm --version       # 11.5.1
+psql --version       # 16.14
+docker --version     # 29.5.2
+```
+---
+
+## 2026-06-03 第2步：数据库表设计 (Prisma + PostgreSQL)
+
+### 做了什么
+用 Prisma Schema 定义了第一批三张核心表，跑 migration 建到了 PostgreSQL 数据库里。
+
+### 为什么 Prisma
+Prisma 有三大功能：
+1. **Schema 文件**：用简洁的语法定义表结构，比手写 SQL 直观
+2. **Migration**：自动对比 schema 和数据库的差异，生成 SQL 并执行
+3. **Client**：自动生成类型安全的查询代码，写 `prisma.user.findMany()` 而不是手写 SQL
+
+### Schema 文件结构（专业术语）
+
+```
+prisma/schema.prisma
+├── generator client      # 告诉 Prisma 生成查询代码
+├── datasource db         # 数据库连接信息
+├── enum ...              # 5个枚举类型
+├── model Role { ... }    # 角色表
+├── model User { ... }    # 用户表
+└── model Customer { ... }# 客户表
+```
+
+### 三张表的设计（大白话解释）
+
+**1. roles（角色表）**
+就像一个"职位清单"，列出系统里所有的岗位类型。
+
+| 字段 | 什么意思 |
+|------|---------|
+| id | 自增编号（1, 2, 3...） |
+| code | 角色编码，用枚举写死（商务/业务/会计/主管/总务/管理员），保证不会有人写出"老板"这种不在清单里的角色 |
+| name | 显示名，如"客户主理人"、"会计岗" |
+| created_at | 这条记录什么时候建的 |
+| updated_at | 这条记录最后一次修改是什么时候 |
+
+**2. users（用户表）**
+系统里每一个登录的人。
+
+| 字段 | 什么意思 |
+|------|---------|
+| id | 自增编号 |
+| username | 登录用户名（唯一，不能重复） |
+| password_hash | 密码的哈希值（不存明文！用 bcrypt 加密后存） |
+| real_name | 真实姓名（显示用） |
+| phone | 手机号（可空） |
+| role_id | 这个用户是哪个角色（外键→roles表） |
+| created_at / updated_at | 创建时间 / 更新时间 |
+
+**3. customers（客户表/企业画像）**
+核心业务表。商务岗填单提单时录入的全部企业信息。
+
+| 字段 | 什么意思 | 对应需求文档字段 |
+|------|---------|-----------------|
+| company_name | 企业名 | 基本信息 |
+| industry | 行业 | 基本信息 |
+| register_date | 注册时间 | 基本信息 |
+| tax_type | 税务类型 | 基本信息 |
+| region | 区域 | 基本信息 |
+| annual_revenue | 年流水（金额） | 企业规模 → **用 Decimal，不是 float** |
+| staff_count | 人员数 | 企业规模 |
+| company_type | 一人/多股东/个体户 | 枚举 |
+| customer_category | 新用户/代理户 | 枚举（必填） |
+| tier | VIP/优质/中低/零申报 | 枚举 |
+| lifecycle_stage | 当前在哪个阶段 | 枚举（默认"填单"） |
+| owner_id | 谁填的（主理人） | 外键→users表 |
+
+### 枚举值说明
+
+五个枚举类型：
+- **RoleCode**：商务/业务/会计/主管/总务/管理员
+- **CompanyType**：一人公司/多股东/个体户
+- **CustomerCategory**：新用户/代理户
+- **CustomerTier**：VIP/优质/中低/零申报（注意：需求文档写"0申报"，但数据库字段不能以数字开头，改为"零申报"）
+- **LifecycleStage**：填单→办件中→办结→维护中→出库（客户从进入到离开的完整流程）
+
+### 关键设计决策
+1. **金额用 Decimal(65,30)**：Prisma 的 `Decimal` 映射到 PostgreSQL 的 `numeric(65,30)`，精度极高，不会像 float 那样出现 0.1+0.2≠0.3 的问题
+2. **枚举用数据库原生 enum**：不用字符串存。好处是数据库层面就能约束值，不会出现脏数据
+3. **外键关系**：users.role_id → roles.id，customers.owner_id → users.id。删除角色或用户时 RESTRICT（如果还有用户绑定这个角色，就不让删）
+4. **Snake_case 映射**：Prisma 字段用 camelCase（如 `companyName`），通过 `@map("company_name")` 映射到数据库的 snake_case，符合 PostgreSQL 命名习惯
+
+### 怎么验证表建好了
+```bash
+# 列出所有表
+psql -d junce_dev -c "\dt"
+
+# 看某张表的结构
+psql -d junce_dev -c "\d roles"
+psql -d junce_dev -c "\d users"
+psql -d junce_dev -c "\d customers"
+
+# 看枚举类型
+psql -d junce_dev -c "\dT"
+```
+
+### 未来要做（后续步骤）
+- 写 seed 脚本，往 roles 表插入 6 条角色数据
+- NestJS 中创建 PrismaModule（全局单例），让各个业务模块能注入 PrismaService
+- 实现 JWT 登录认证
+- 陆续建其他表：ServiceItem、Charge、StaffAssignment、WorkOrder、Task、TenantRegister、Fission
+
+---
+
+## 2026-06-03 第3步：修正金额字段精度 Decimal(12,2)
+
+### 问题
+上一步用 Prisma 默认的 `Decimal` 类型，映射到 PostgreSQL 是 `numeric(65,30)`——总共 65 位数字、其中 30 位小数。对钱来说 30 位小数完全没意义（人民币最小单位是分，精确到角都用不到），还浪费存储空间。
+
+### 改了什么
+- `customers.annual_revenue` 从 `Decimal?`（默认 numeric(65,30)）改为 `Decimal? @db.Decimal(12, 2)`
+- (12,2) 的含义：12 位数总共，小数点后占 2 位 → 整数部分最多 10 位（百亿级），小数部分精确到分
+- ✅ 可以存 9999999999.99（约 100 亿），完全够用
+- ✅ 2 位小数 = 精确到分，符合人民币记账规范
+- ✅ 不会像 float 那样出现 0.1+0.2≠0.3 的浮点误差
+
+### CLAUDE.md 更新
+铁律第 4 条从"金额字段一律用 Decimal"升级为：
+> 金额字段一律用 Decimal，精度统一 @db.Decimal(12,2)，禁止用 float 或 Prisma 默认 Decimal(65,30)
+
+这样以后所有金额字段（收费、成本、工资等）都用同一规范，不会搞混。
+
+### 验证命令
+```sql
+SELECT column_name, data_type, numeric_precision, numeric_scale
+FROM information_schema.columns
+WHERE table_name = 'customers' AND column_name = 'annual_revenue';
+```
+结果：
+- numeric_precision = 12 ✅
+- numeric_scale = 2 ✅
+
+### Prisma Migration 警告
+Prisma 自动生成的 SQL 里有一句注释：
+> You are about to alter the column...data could be lost
+
+这是标准的安全警告——每次改字段类型都可能有数据损失。目前表是空的，不影响。**以后如果表里有数据再改精度，要先备份。**
+
+---
+
+## 2026-06-03 第4步：登录认证 + RBAC 权限 + 种子数据
+
+### 做了什么
+实现 JWT 登录、角色权限守卫、种子数据。只做 auth 相关，不碰业务模块。
+
+### 新增文件清单
+
+```
+server/src/
+├── prisma/
+│   ├── prisma.service.ts    # Prisma 数据库连接（全局单例）
+│   └── prisma.module.ts     # Prisma 模块（@Global）
+├── auth/
+│   ├── auth.module.ts       # 认证模块
+│   ├── auth.service.ts      # 登录验证 + JWT 签发
+│   ├── auth.controller.ts   # POST /auth/login, GET /auth/me, GET /auth/admin-only
+│   ├── dto/login.dto.ts     # 登录入参校验（用户名+密码不能为空）
+│   ├── decorators/roles.decorator.ts  # @Roles() 装饰器
+│   └── guards/
+│       ├── jwt-auth.guard.ts # 解析 JWT，校验有效性
+│       └── roles.guard.ts    # 检查角色是否在允许列表中
+prisma/
+└── seed.ts                  # 种子数据脚本
+```
+
+### 关键设计决策
+
+**1. Prisma 7 adapter 模式**
+- Prisma 7 不再自动从环境变量读 DATABASE_URL
+- 必须通过 adapter 显式传入连接：`new PrismaPg({ connectionString: ... })`
+- PrismaService 在 constructor 里调 `super({ adapter: ... })`
+
+**2. JWT payload 包含角色信息**
+- token 里存了 `sub`（用户ID）、`roleCode`、`roleName`
+- 权限检查不需要查数据库，直接用 token 里的 roleCode 判断
+- 7 天过期
+
+**3. 双重守卫链**
+- `JwtAuthGuard`：先校验 token 是否有效，有效则把 payload 挂到 `req.user`
+- `RolesGuard`：读 `@Roles()` 装饰器的参数，对比 `req.user.roleCode`
+- 两个守卫分开写，可以单独用（比如 `/auth/me` 只验登录不要角色检查）
+
+**4. upsert 模式写种子**
+- 用 `prisma.role.upsert()` 而不是 `create()`
+- 好处：可以重复跑 seed，不会因为数据已存在而报错
+
+### 踩的坑（重要！）
+
+**坑1：Prisma 7 构造函数必须传 adapter**
+- 现象：`new PrismaClient()` 报 `PrismaClientInitializationError`
+- 原因：Prisma 7 改变了客户端初始化方式，不再自动读取 env
+- 解决：安装 `@prisma/adapter-pg`，构造时传 `{ adapter: new PrismaPg({ connectionString: ... }) }`
+- 影响范围：PrismaService 和 seed.ts 都要改
+
+**坑2：Prisma 7 生成代码没有 index 文件**
+- 现象：`import { PrismaClient } from '../../generated/prisma'` 报 MODULE_NOT_FOUND
+- 原因：Prisma 7 的 `output` 目录只有 `client.ts`、`models.ts` 等，没有入口 index
+- 解决：改为 `import { PrismaClient } from '../../generated/prisma/client'`
+
+**坑3：seed.ts 需要从 tsconfig 排除**
+- 现象：`nest build` 编译 seed.ts 报类型错误
+- 原因：seed.ts 在 prisma/ 目录下，不在 src/ 里，但 nest build 扫描了它
+- 解决：`tsconfig.build.json` 的 exclude 里加了 `"prisma"`
+
+**坑4：dotenv 必须显式加载**
+- seed.ts 是独立脚本，不像 NestJS 应用那样自动加载环境变量
+- 解决：seed.ts 开头调 `dotenv.config()`
+
+### 种子数据
+
+6 个角色 + 6 个测试账号（密码统一：123456）
+
+| 用户名 | 角色 | 姓名 |
+|--------|------|------|
+| shangwu | 商务 | 商务张三 |
+| yewu | 业务 | 业务李四 |
+| kuaiji | 会计 | 会计王五 |
+| zhuguan | 主管 | 主管赵六 |
+| zongwu | 总务 | 总务钱七 |
+| admin | 管理员 | 管理员周八 |
+
+### 验证命令
+
+```bash
+# 确认表里有数据
+psql -d junce_dev -c "SELECT id, code, name FROM roles ORDER BY id;"
+psql -d junce_dev -c "SELECT id, username, real_name, role_id FROM users ORDER BY id;"
+```
+
+### 架构图（大白话版）
+
+```
+用户请求 → Controller → Guard → Service → 数据库
+                ↓
+          JwtAuthGuard
+          从 Header 取 Bearer token
+          → 解析出用户信息（含 roleCode）
+          → 写入 req.user
+                ↓
+          RolesGuard（如果有 @Roles() 装饰器）
+          → 读 @Roles('管理员') 的参数
+          → 对比 req.user.roleCode === '管理员'
+          → 匹配放行 / 不匹配 403
+```
+
+### JWT 工作流程（大白话版）
+
+1. **登录**：用户输入用户名+密码 → 后端用 bcrypt 对比密码哈希 → 一致就签一张"通行证"（JWT token）→ 通行证里写了"你是谁、什么角色"
+2. **后续请求**：前端每次请求在 Header 里带 `Authorization: Bearer <token>` → JwtAuthGuard 验证通行证没过期、没被篡改 → 把通行证里的信息挂到 `req.user`
+3. **权限检查**：接口上标了 `@Roles('管理员')` → RolesGuard 看 `req.user.roleCode` 在不在允许列表里 → 不在就 403
+
+### 为什么要用双 Guard 而不是一个
+
+- `/auth/me`：只要登录就能看，不需要特定角色 → 只用 JwtAuthGuard
+- `/auth/admin-only`：既要登录，又要是管理员 → 用 JwtAuthGuard + RolesGuard
+- 分开才能灵活组合
+
+---
+
+## 2026-06-03 第5步：ESM/CJS 冲突修复
+
+### 问题
+`pnpm start:dev` 报错：`ReferenceError: exports is not defined in ES module scope`，路径指向 `dist/generated/prisma/client.js`。
+
+### 根因
+Prisma 7 默认生成 ESM 风格的 TypeScript（含 `import.meta.url`、`import { fileURLToPath }`），但 NestJS 用 `module: "nodenext"` 编译成 CommonJS。两边模块格式不对齐，Node.js 运行时把 CJS 的 `exports` 塞进了 ESM 上下文，报错。
+
+同时，NestJS 不会自动加载 `.env` 文件。PrismaService 构造函数里读 `process.env['DATABASE_URL']`，未设置时 `PrismaPg` adapter 收到的 `connectionString` 是 `undefined`，就用当前系统用户名 `a1234` 作为数据库名去连，报 `database "a1234" does not exist`。
+
+### 修复
+1. `prisma/schema.prisma` → generator client 加 `moduleFormat = "cjs"` → Prisma 去掉 ESM 专用 API
+2. `src/main.ts` → 最顶部加 `import 'dotenv/config'` → 任何代码执行前 DATABASE_URL 已就绪
+
+### 新踩坑
+**坑：curl 被本地代理拦截返回 502**
+- 原因：系统配了 `http_proxy=http://127.0.0.1:7890`（FlClash），curl 请求 localhost 也走代理
+- 解决：加 `--noproxy "*"` 绕过
+
+---
+
+## 2026-06-03 第6步：客户填单/客户管理模块
+
+### 做了什么
+实现 customers 模块的完整 CRUD 接口（仅后端）。
+- POST /customers 新建客户，ownerId 自动从 JWT 取
+- GET /customers 列表（支持 tier / lifecycleStage / keyword 筛选）
+- GET /customers/:id 详情
+- PATCH /customers/:id 修改
+
+### 关键设计决策
+
+**1. ownerId 自动注入，前端不需要传**
+- Controller 里 `req.user.sub`（从 JWT 解析）直接传给 Service
+- 防止前端伪造 ownerId 导致权限问题
+- 后续加角色隔离时，改 ownerId 只能是主理人自己或管理员
+
+**2. Decimal 序列化**
+- Prisma 返回的 annualRevenue 是 Prisma.Decimal 对象，直接 JSON 序列化会变成奇怪的格式
+- Service 层 `serializeDecimal()` 把 Prisma.Decimal 转成 JS number
+- Decimal(12,2) 最大 9999999999.99 完全在 JS number 安全范围（2^53）内
+
+**3. PartialType 来自 @nestjs/mapped-types**
+- 不是 `@nestjs/common`！这是 NestJS 11 的变化
+- `class UpdateCustomerDto extends PartialType(CreateCustomerDto)` → 所有字段自动变成可选
+
+**4. 枚举值来自 Prisma 生成的 client**
+- DTO 里 `@IsEnum(CompanyType)` 等，枚举来源是 `../../generated/prisma/client`
+- 好处：数据库枚举和 DTO 校验永远同步，不会出现 DTO 接受了一个数据库不存在的值
+
+**5. 权限预留**
+- @Roles() import 已写在 controller 里但注释掉
+- TODO 注释标注了"客户权限表补充后启用"
+
+### 文件结构
+```
+src/customers/
+├── dto/
+│   ├── create-customer.dto.ts   # 新建客户校验
+│   ├── update-customer.dto.ts   # 修改客户校验（PartialType）
+│   └── query-customer.dto.ts    # 查询参数校验
+├── customers.service.ts          # CRUD 逻辑
+├── customers.controller.ts       # 接口 + JWT 守卫
+└── customers.module.ts           # 模块注册
+
+---
+
+## 2026-06-06 第7步：服务模板 + 已读确认
+
+### 做了什么
+新增 service_templates（服务模板）和 service_read_confirmations（已读确认）两张表及对应后端接口。
+
+### 业务背景
+客户主理人填单时选择了服务类型（如"注册""食品证"），系统自动匹配该服务需要的资料、流程、时效。相关人员查看后点击"已阅读/确认"，才能继续下一步。
+
+### 新增数据库表
+
+**service_templates** — 服务模板
+- serviceType: 服务类型名称（String，如"注册"、"食品证"）
+- requiredMaterials: JSON 字段，资料清单数组（如 ["营业执照", "法人身份证"]）
+- processSteps: JSON 字段，办理步骤数组（如 ["收集资料", "提交申请"]）
+- estimatedDuration: String，预计时效（如 "3-5个工作日"）
+- isActive: 是否启用（默认 true）
+
+**service_read_confirmations** — 已读确认
+- customerId → customers, templateId → service_templates, userId → users
+- serviceItemId: 可空，为二期关联具体服务项预留
+- 唯一约束：(customerId, templateId, userId) —— 同一人+同一客户+同一模板只能确认一次
+
+### 新增接口
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| /service-templates | GET | 模板列表，可选 ?serviceType=食品证 |
+| /service-templates/:id | GET | 模板详情 |
+| /service-read-confirmations | POST | 提交已读确认 |
+| /service-read-confirmations | GET | 查询确认记录 ?customerId=X |
+
+### 关键设计决策
+
+1. **JSON 字段而非大段文本**：requiredMaterials 和 processSteps 用 JSON 数组存，前端可以逐条渲染列表，而不是解析大段 Markdown
+2. **estimatedDuration 用 String 而非 Int**：时效可能是 "3-5个工作日"、"视材料齐全情况"，单个数字不够表达
+3. **唯一约束防重复确认**：数据库层面保证同一人+同一客户+同一模板只存一条
+4. **serviceItemId 为一期预留**：可空字段，二期关联到具体的 ServiceItem 记录
+
+### 种子数据
+15 个服务模板：注册、地址、开户、变更、注销、代理、社保、公积金、进出口备案、食品证、道路运输证、卫生证、代理记账、财务外包、合规项目。
+内容统一用"待客户补充"占位——结构完整，真实资料等客户给。
+
+### 权限
+- 查询模板：所有登录角色
+- 提交确认：所有登录角色
+- @Roles() 已预留，代码中注释掉，等权限表到后启用
+
+### 验证结果
+8 项 curl 测试全部通过：模板列表、筛选、详情、提交确认、重复确认返回 409、查确认记录、无 token 被 401 拦截。
+
+---
+
+## 2026-06-06(晚) 第8步：ServiceItem + StaffAssignment 模块
+
+### 做了什么
+补齐客户填单提单的另外两块——服务项（ServiceItem）和人员配置（StaffAssignment）。
+
+### 新增数据库表
+- **service_items**: customerId + serviceTemplateId 唯一约束防重复
+- **staff_assignments**: customerId 唯一(一个客户一份)，四个岗位 FK→users
+- 新增枚举 ItemStatus(待办/办件中/办结)
+
+### ServiceItem ↔ ServiceTemplate 关系
+ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键关联，查客户服务项时 include template 一次拿到全部详情。
+
+### 关键设计
+1. **批量添加**: POST body 传 templateIds 数组，一次创建多条。重复的会被跳过并提示
+2. **唯一约束**: (customerId, serviceTemplateId) UNIQUE，数据库层面防重复
+3. **角色校验**: StaffAssignment 配置时会查被指派用户的 role.code，不匹配返回 400
+4. **PUT upsert**: 不存在则创建，已存在则更新，前端不用管先查后改
+
+### 角色校验规则
+- businessStaffId → 允许"商务"或"业务"
+- accountantId → 必须"会计"
+- generalAffairsId → 必须"总务"
+- consultantId → 本期可空，TODO
+
+### 新增接口(5个)
+- POST /customers/:customerId/service-items(批量添加)
+- GET /customers/:customerId/service-items(列表含模板详情)
+- PATCH /service-items/:id(只允许改 status)
+- PUT /customers/:customerId/staff-assignment(upsert+角色校验)
+- GET /customers/:customerId/staff-assignment(查配置)
+
+### 验证结果
+9 项 curl 全部通过：批量添加 3 个、重复提示错误、列表含模板信息、状态修改、人员 upsert+角色详情、角色不匹配 400、查配置、无 token 401×2。
+
+---
+
+## 2026-06-06(深夜) 第9步：Users 查询接口
+
+### 做了什么
+新增 GET /users 接口，供前端人员配置下拉选择框使用。
+
+### 新增文件
+- `src/users/dto/query-user.dto.ts` → roleCode 用 Prisma RoleCode enum 校验
+- `src/users/users.service.ts` → JOIN role，select 严格排除 passwordHash
+- `src/users/users.controller.ts` → GET /users?roleCode=X，JwtAuthGuard
+- `src/users/users.module.ts`
+
+### 关键设计
+1. **roleCode 用 Prisma 枚举校验**：不自己写字符串判断，非法值如 `roleCode=老板` → 400
+2. **严格排除敏感字段**：select 明确列出 id/username/realName/phone/role，不做 `select: *`
+3. **稳定排序**：roleId, id 升序
+
+### 验证结果
+4 项 curl 全部通过：查全部 6 人含 roleCode/roleName 且无 passwordHash、按 roleCode=会计 筛选 1 人、无 token 401、非法 roleCode=老板 400。
+
+---
+
+## 2026-06-06(凌晨) 第10步：WorkOrder 办件流转 / 办结打卡
+
+### 做了什么
+实现业务链路第二步——办件流转与办结打卡。
+
+### 新增数据库
+- work_orders 表：customerId + serviceItemId(UNIQUE) + handlerId + receiptReceiverId + archiveFiles(JSON) + status + completedAt + checkedInAt
+- 枚举 WorkOrderStatus：待办 → 办件中 → 办结 → 已打卡
+
+### 关键设计
+1. **一个服务项一个办件**：MVP 简化，serviceItemId UNIQUE
+2. **ownerId 自动取**：从 serviceItem 查 customerId，前端不传
+3. **PATCH 不能改"已打卡"**：防止绕过归档校验，必须走 check-in
+4. **check-in 必须传 archiveFiles**：至少1个文件，空数组 → 400
+5. **办结时自动写 completedAt**：不是手动填
+6. **归档材料用 JSON**：文件上传模块未做前作为抽象层
+
+### 新增接口(5个)
+- POST /work-orders
+- GET /work-orders?customerId/handlerId/status
+- GET /work-orders/:id
+- PATCH /work-orders/:id（禁止改已打卡）
+- POST /work-orders/:id/check-in（必须传 archiveFiles）
+
+### 验证结果
+10 项 curl 全部通过：创建办件含 handler、重复 409、列表、状态变更、办结+归档自动写时间、PATCH 改已打卡 400、打卡成功写 checkedInAt、空 archiveFiles 400、无 token 401×2。
+
+---
+
+## 2026-06-07 第11步：WorkOrder 409 优化 + 全量回归
+
+### 做了什么
+优化 POST /work-orders 重复创建时的 409 响应，附带已有办件的完整信息。
+
+### 修改内容
+- `work-orders.service.ts`：`ConflictException` 从纯字符串改为结构化对象，包含 `statusCode`、`message`、`error`、`existingWorkOrder`（含 id/customerId/serviceItemId/status/handlerId/receiptReceiverId/createdAt/serviceName）
+
+### 回归验证
+14/14 全绿：
+- WorkOrder: 创建、重复409+existingWorkOrder、列表、办件中、办结+归档、打卡、401
+- Auth /me ✅
+- Customers 详情 ✅
+- ServiceItems 列表 ✅
+- StaffAssignments 人员配置 ✅
+- ServiceTemplates 列表 ✅
+- Users 筛选 ✅
+- pnpm build 0 错误 ✅

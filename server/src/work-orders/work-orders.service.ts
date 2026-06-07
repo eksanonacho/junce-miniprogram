@@ -1,0 +1,170 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateWorkOrderDto } from './dto/create-work-order.dto';
+import { UpdateWorkOrderDto } from './dto/update-work-order.dto';
+import { WorkOrderStatus } from '../../generated/prisma/client';
+
+@Injectable()
+export class WorkOrdersService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  // 创建办件
+  async create(dto: CreateWorkOrderDto) {
+    // 验证服务项存在，并拿到 customerId
+    const item = await this.prisma.serviceItem.findUnique({
+      where: { id: dto.serviceItemId },
+      select: { id: true, customerId: true, serviceTemplate: { select: { serviceType: true } } },
+    });
+    if (!item) {
+      throw new NotFoundException(`服务项 id=${dto.serviceItemId} 不存在`);
+    }
+
+    // 验证该服务项还没有办件
+    const existing = await this.prisma.workOrder.findUnique({
+      where: { serviceItemId: dto.serviceItemId },
+    });
+    if (existing) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: '该服务项已存在办件工单，请勿重复创建',
+        error: 'Conflict',
+        existingWorkOrder: {
+          id: existing.id,
+          customerId: existing.customerId,
+          serviceItemId: existing.serviceItemId,
+          status: existing.status,
+          handlerId: existing.handlerId,
+          receiptReceiverId: existing.receiptReceiverId,
+          createdAt: existing.createdAt,
+          serviceName: item.serviceTemplate.serviceType,
+        },
+      });
+    }
+
+    // 验证 handler 存在（如果传了）
+    if (dto.handlerId) {
+      await this.validateUser(dto.handlerId);
+    }
+    if (dto.receiptReceiverId) {
+      await this.validateUser(dto.receiptReceiverId);
+    }
+
+    return this.prisma.workOrder.create({
+      data: {
+        customerId: item.customerId,
+        serviceItemId: dto.serviceItemId,
+        handlerId: dto.handlerId,
+        receiptReceiverId: dto.receiptReceiverId,
+      },
+      include: this.includes(),
+    });
+  }
+
+  // 列表
+  async findAll(query: {
+    customerId?: number;
+    handlerId?: number;
+    status?: WorkOrderStatus;
+  }) {
+    const where: any = {};
+    if (query.customerId) where.customerId = query.customerId;
+    if (query.handlerId) where.handlerId = query.handlerId;
+    if (query.status) where.status = query.status;
+
+    return this.prisma.workOrder.findMany({
+      where,
+      include: this.includes(),
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // 详情
+  async findOne(id: number) {
+    const wo = await this.prisma.workOrder.findUnique({
+      where: { id },
+      include: this.includes(),
+    });
+    if (!wo) throw new NotFoundException(`办件 id=${id} 不存在`);
+    return wo;
+  }
+
+  // 更新（不允许直接改"已打卡"）
+  async update(id: number, dto: UpdateWorkOrderDto) {
+    const wo = await this.findOne(id);
+
+    // 不允许 PATCH 把 status 直接改成"已打卡"
+    if (dto.status === '已打卡') {
+      throw new BadRequestException(
+        '不允许直接修改为"已打卡"。请通过 POST /work-orders/:id/check-in 完成打卡',
+      );
+    }
+
+    const data: any = { ...dto };
+
+    // status 变更为"办结"时自动写 completedAt
+    if (dto.status === '办结' && wo.status !== '办结') {
+      data.completedAt = new Date();
+    }
+
+    // 验证 handler/receiptReceiver 存在
+    if (dto.handlerId) await this.validateUser(dto.handlerId);
+    if (dto.receiptReceiverId) await this.validateUser(dto.receiptReceiverId);
+
+    // TODO: 后续 WorkOrder status 变化可同步更新 ServiceItem.status，
+    // 避免服务项状态和办件状态不一致。本期暂不联动。
+
+    return this.prisma.workOrder.update({
+      where: { id },
+      data,
+      include: this.includes(),
+    });
+  }
+
+  // 办结打卡 —— 必须传 archiveFiles，且当前 status 必须是"办结"
+  async checkIn(id: number, archiveFiles: any[]) {
+    const wo = await this.findOne(id);
+
+    if (wo.status !== '办结') {
+      throw new BadRequestException(
+        `当前状态为"${wo.status}"，只有"办结"状态才能打卡`,
+      );
+    }
+
+    return this.prisma.workOrder.update({
+      where: { id },
+      data: {
+        status: '已打卡',
+        archiveFiles,
+        checkedInAt: new Date(),
+      },
+      include: this.includes(),
+    });
+  }
+
+  // ---- helpers ----
+
+  private async validateUser(userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`用户 id=${userId} 不存在`);
+  }
+
+  private includes() {
+    return {
+      customer: { select: { id: true, companyName: true } },
+      serviceItem: {
+        select: {
+          id: true,
+          status: true,
+          serviceTemplate: { select: { id: true, serviceType: true } },
+        },
+      },
+      handler: { select: { id: true, realName: true } },
+      receiptReceiver: { select: { id: true, realName: true } },
+    };
+  }
+}
