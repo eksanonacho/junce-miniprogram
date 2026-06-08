@@ -69,7 +69,9 @@ junce-miniprogram/
 │       ├── service-items/       # 客户服务项
 │       ├── staff-assignments/   # 人员配置
 │       ├── users/               # 用户查询
-│       └── work-orders/         # 办件流转/打卡
+│       ├── work-orders/         # 办件流转/打卡
+│       ├── charges/             # 费用管控+催收
+│       └── tenant-registers/    # 托管入档(仅代理户)
 ```
 
 ---
@@ -87,8 +89,10 @@ junce-miniprogram/
 | **ServiceItems** | 批量添加、唯一约束防重复、状态修改 | ✅ |
 | **StaffAssignments** | 人员配置 upsert、角色校验 | ✅ |
 | **WorkOrder** | 办件流转、状态机、办结打卡、归档必传、409+existingWorkOrder | ✅ |
+| **Charge** | 收费记录、总务审核、催收、@Roles 实战(总务+管理员) | ✅ |
+| **TenantRegister** | 托管入档(仅代理户)、方案确认、会计分派、本人校验 | ✅ |
 
-### 当前接口清单（22 个）
+### 当前接口清单（35 个）
 
 ```
 POST   /auth/login                          # 登录
@@ -120,6 +124,20 @@ GET    /work-orders                          # 办件列表
 GET    /work-orders/:id                      # 办件详情
 PATCH  /work-orders/:id                      # 更新办件
 POST   /work-orders/:id/check-in             # 办结打卡
+
+POST   /charges                               # 创建收费
+GET    /charges                               # 查询收费(按状态筛选)
+PATCH  /charges/:id                           # 修改收费(总务+管理员)
+POST   /charges/:id/confirm                   # 确认已收(总务+管理员)
+POST   /charges/:id/remind                    # 发起催收(总务+管理员)
+GET    /charges/:id/reminders                 # 催收记录
+
+POST   /tenant-registers                      # 创建托管入档(会计+主管+管理员)
+GET    /tenant-registers/:id                  # 托管详情
+PATCH  /tenant-registers/:id                  # 更新概况/方案
+POST   /tenant-registers/:id/confirm-plan     # 主理人确认方案
+POST   /tenant-registers/:id/assign-accountant # 分派会计(主管+管理员)
+POST   /tenant-registers/:id/confirm-assignment # 会计确认分派(须本人)
 ```
 
 全部已 curl 验证通过（正向 + 反向 401/403）。
@@ -130,7 +148,7 @@ POST   /work-orders/:id/check-in             # 办结打卡
 
 **库名**：`junce_dev`，本地 `postgresql://a1234@localhost:5432/junce_dev`
 
-### 业务表（8 张）
+### 业务表（11 张）
 
 | 表 | 行数 | 用途 |
 |----|------|------|
@@ -142,6 +160,9 @@ POST   /work-orders/:id/check-in             # 办结打卡
 | `service_items` | ~ | 客户选择的服实例 |
 | `staff_assignments` | ~ | 客户人员配置 |
 | `work_orders` | ~ | 办件工单 |
+| `charges` | ~ | 收费记录 |
+| `collection_reminders` | ~ | 催收记录 |
+| `tenant_registers` | ~ | 托管入档(仅代理户) |
 
 ### 枚举（6 个）
 
@@ -214,10 +235,9 @@ curl -s --noproxy "*" http://localhost:3000/customers \
 ## 九、下一步
 
 按 [ROADMAP.md](ROADMAP.md)：
-1. **费用管控 Charge**（权限限总务+管理员）
-2. **托管入档 TenantRegister**（需办件先完成）
-3. **任务 Task**（框架可先搭，任务内容等客户）
-4. **看板系统**（需前面所有模块数据）
+1. **任务 Task**（框架可先搭，任务内容等客户）
+2. **业务裂变 Fission**（简化版：填单+确认+归档）
+3. **看板系统**（需前面所有模块数据）
 
 ---
 
@@ -242,4 +262,4 @@ curl -s --noproxy "*" http://localhost:3000/customers \
 
 ---
 
-> 最后更新：2026-06-07
+> 最后更新：2026-06-08
