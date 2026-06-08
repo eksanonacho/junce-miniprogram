@@ -154,6 +154,8 @@
 - ServiceItems + StaffAssignment 后端接口
 - Users 查询接口（GET /users?roleCode=X）
 - WorkOrder 办件流转 / 办结打卡后端接口
+- Charge 费用管控 + 催收后端接口（首次 @Roles 实战）
+- TenantRegister 托管入档后端接口（仅代理户，会计本人校验）
 
 当前前端同学负责：
 
@@ -161,8 +163,8 @@
 
 当前后端下一步按 ROADMAP.md 推进，优先考虑：
 
-- Charge 费用管控
-- TenantRegister 托管入档
+- Task 任务框架（等客户给任务内容）
+- Fission 裂变简化版
 - Task 任务框架（等客户给任务内容）
 - Fission 裂变简化版
 - 看板模块

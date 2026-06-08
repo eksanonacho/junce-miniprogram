@@ -3,7 +3,7 @@
 > **这个文件是给谁看的**:任何改完代码、要确认没改坏系统的人(或 AI)。
 > **什么时候用**:每次改代码后做回归测试;新模块开发完做验证;排查"是不是哪里坏了"。
 > **解决什么问题**:照着跑一遍,快速确认核心功能(登录/权限/客户)还正常。
-> 最后更新:2026-06-06(凌晨)。所有 curl 命令均已实测通过。
+> 最后更新:2026-06-08(晚)。所有 curl 命令均已实测通过。
 
 ---
 
@@ -244,7 +244,120 @@ curl -s --noproxy "*" -X POST http://localhost:3000/work-orders/2/check-in \
 
 ---
 
-## 六、前端联调测试(前端做完后逐项验)
+## 六、Charge 费用管控测试
+
+> ⚠️ PATCH/confirm/remind 限总务+管理员，商务访问返回 403。
+
+```bash
+# 登录不同角色
+TOKEN_SW=$(curl ... username:shangwu)   # 商务
+TOKEN_ZW=$(curl ... username:zongwu)     # 总务
+
+# 1. 商务创建 charge
+curl -s --noproxy "*" -X POST http://localhost:3000/charges \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_SW" \
+  -d '{"customerId":1,"chargeMode":"一次性","amount":50000,"contractNo":"HT-001"}'
+
+# 2. 商务 PATCH → 403
+curl -s --noproxy "*" -X PATCH http://localhost:3000/charges/1 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_SW" -d '{"contractNo":"XX"}'
+
+# 3. 总务发起催收（toUserId不传，默认业主理人）
+curl -s --noproxy "*" -X POST http://localhost:3000/charges/1/remind \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_ZW" -d '{"message":"请确认收款"}'
+
+# 4. 总务确认已收
+curl -s --noproxy "*" -X POST http://localhost:3000/charges/1/confirm \
+  -H "Authorization: Bearer $TOKEN_ZW"
+
+# 5. 已收后催收 → 400
+curl -s --noproxy "*" -X POST http://localhost:3000/charges/1/remind \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_ZW" -d '{}'
+
+# 6. 筛选
+curl -s --noproxy "*" "http://localhost:3000/charges?chargeStatus=%E6%9C%AA%E6%94%B6" \
+  -H "Authorization: Bearer $TOKEN_SW"
+```
+**预期**:1→201;2→403;3→201催收成功;4→201已收+confirmer已填;5→400;6→筛选正确。
+
+---
+
+## 七、TenantRegister 托管入档测试(仅代理户)
+
+> ⚠️ POST/PATCH 限会计+主管+管理员; assign-accountant 限主管+管理员; confirm-assignment 限会计(须本人)+管理员。
+> ⚠️ 只有 `customerCategory=代理户` 的客户能创建，非代理户返回 400。
+> ⚠️ 测试前先 `psql -d junce_dev -c "SELECT id,company_name,customer_category FROM customers"` 确认哪个是代理户、哪个是新用户。
+
+### 登录准备
+```bash
+TOKEN_SW=$(curl -s --noproxy "*" -X POST http://localhost:3000/auth/login -H "Content-Type: application/json" -d '{"username":"shangwu","password":"123456"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
+TOKEN_KJ=$(curl -s --noproxy "*" -X POST http://localhost:3000/auth/login -H "Content-Type: application/json" -d '{"username":"kuaiji","password":"123456"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
+TOKEN_ZG=$(curl -s --noproxy "*" -X POST http://localhost:3000/auth/login -H "Content-Type: application/json" -d '{"username":"zhuguan","password":"123456"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
+```
+
+### 1. 会计创建代理户托管入档
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/tenant-registers \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_KJ" \
+  -d '{"customerId":<代理户真实ID>,"enterpriseDetail":{"scale":"中型"},"servicePlan":{"accounting":"月度"}}' | python3 -m json.tool
+```
+**预期**:201，返回 id，customerCategory=代理户。
+
+### 2. 商务创建 → 403
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/tenant-registers \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_SW" \
+  -d '{"customerId":<代理户真实ID>}' | python3 -m json.tool
+```
+**预期**:403，`权限不足：需要 [会计、主管、管理员] 角色，当前为 商务`。
+
+### 3. 非代理户创建 → 400
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/tenant-registers \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_KJ" \
+  -d '{"customerId":<新用户真实ID>}' | python3 -m json.tool
+```
+**预期**:400，`只有代理户才能创建托管入档`。
+
+### 4. 主管分派会计
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/tenant-registers/<id>/assign-accountant \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_ZG" \
+  -d '{"accountantId":3}' | python3 -m json.tool
+```
+**预期**:201，assignedAccountant.realName=会计王五。
+
+### 5. 主理人 confirm-plan
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/tenant-registers/<id>/confirm-plan \
+  -H "Authorization: Bearer $TOKEN_SW" | python3 -m json.tool
+```
+**预期**:201，planConfirmedByOwner=true，planConfirmedAt 已填。
+
+### 6. 被分派会计本人 confirm-assignment
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/tenant-registers/<id>/confirm-assignment \
+  -H "Authorization: Bearer $TOKEN_KJ" | python3 -m json.tool
+```
+**预期**:201，assignConfirmed=true，assignConfirmedAt 已填。kuaiji(id=3) 是 assignedAccountantId=3 本人。
+
+### 7. 无 token 查询 → 401
+```bash
+curl -s --noproxy "*" http://localhost:3000/tenant-registers/1 | python3 -m json.tool
+```
+**预期**:401。
+
+---
+
+## 八、前端联调测试(前端做完后逐项验)
 
 | 测试项 | 怎么验 | 预期 |
 |---|---|---|
@@ -257,7 +370,7 @@ curl -s --noproxy "*" -X POST http://localhost:3000/work-orders/2/check-in \
 
 ---
 
-## 七、回归测试顺序(每次改代码后照做)
+## 九、回归测试顺序(每次改代码后照做)
 
 1. **`pnpm build`** — 先确认能编译通过(0 errors)。
 2. **启动后端** — `pnpm start:dev`,看到 successfully started。
@@ -265,13 +378,15 @@ curl -s --noproxy "*" -X POST http://localhost:3000/work-orders/2/check-in \
 4. **Customers 测试** — 跑第三节 6 条,确认增删改查筛选都对。
 5. **Users 测试** — 跑第四节 4 条,确认列表/筛选/401/400 都对。
 6. **WorkOrder 测试** — 跑第五节,确认创建/状态流转/打卡/归档校验/401 都对。
-7. **前端页面测试** — 跑第六节(如果改动涉及前端)。
+7. **Charge 测试** — 跑第六节,确认 403/催收/确认/400 都对。
+8. **TenantRegister 测试** — 跑第七节,确认代理户/403/400/分派/本人确认/401 都对。
+9. **前端页面测试** — 跑第八节(如果改动涉及前端)。
 
 > 原则:改了后端,至少跑 Auth + Customers;改了某个模块,重点测那个模块 + 它依赖的(如改客户必连带测登录)。
 
 ---
 
-## 八、常见测试问题
+## 十、常见测试问题
 
 | 问题 | 现象 | 解决 |
 |---|---|---|

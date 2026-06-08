@@ -67,7 +67,9 @@ junce-miniprogram/
 │       ├── customers/           # 客户填单/管理 CRUD
 │       ├── service-templates/   # 服务模板 + 已读确认
 │       ├── service-items/       # 客户服务项
-│       └── staff-assignments/   # 人员配置
+│       ├── staff-assignments/   # 人员配置
+│       ├── users/               # 用户查询
+│       └── work-orders/         # 办件流转/打卡
 ```
 
 ---
@@ -84,8 +86,9 @@ junce-miniprogram/
 | **ServiceTemplates** | 15 个服务模板、JSON 字段、已读确认 | ✅ |
 | **ServiceItems** | 批量添加、唯一约束防重复、状态修改 | ✅ |
 | **StaffAssignments** | 人员配置 upsert、角色校验 | ✅ |
+| **WorkOrder** | 办件流转、状态机、办结打卡、归档必传、409+existingWorkOrder | ✅ |
 
-### 当前接口清单（16 个）
+### 当前接口清单（22 个）
 
 ```
 POST   /auth/login                          # 登录
@@ -108,6 +111,15 @@ PATCH  /service-items/:id                   # 修改服务项状态
 
 PUT    /customers/:customerId/staff-assignment # 配置人员
 GET    /customers/:customerId/staff-assignment # 查人员配置
+
+GET    /users                                # 用户列表
+GET    /users?roleCode=会计                  # 按角色筛选
+
+POST   /work-orders                          # 创建办件
+GET    /work-orders                          # 办件列表
+GET    /work-orders/:id                      # 办件详情
+PATCH  /work-orders/:id                      # 更新办件
+POST   /work-orders/:id/check-in             # 办结打卡
 ```
 
 全部已 curl 验证通过（正向 + 反向 401/403）。
@@ -118,7 +130,7 @@ GET    /customers/:customerId/staff-assignment # 查人员配置
 
 **库名**：`junce_dev`，本地 `postgresql://a1234@localhost:5432/junce_dev`
 
-### 业务表（7 张）
+### 业务表（8 张）
 
 | 表 | 行数 | 用途 |
 |----|------|------|
@@ -129,6 +141,7 @@ GET    /customers/:customerId/staff-assignment # 查人员配置
 | `service_read_confirmations` | ~ | 已读确认记录 |
 | `service_items` | ~ | 客户选择的服实例 |
 | `staff_assignments` | ~ | 客户人员配置 |
+| `work_orders` | ~ | 办件工单 |
 
 ### 枚举（6 个）
 
@@ -201,11 +214,10 @@ curl -s --noproxy "*" http://localhost:3000/customers \
 ## 九、下一步
 
 按 [ROADMAP.md](ROADMAP.md)：
-1. **办件流转 WorkOrder**（可立即开始，依赖客户模块已完成）
-2. **费用管控 Charge**（可与办件并行，权限限总务+管理员）
-3. **托管入档 TenantRegister**（需办件先完成）
-4. **任务 Task**（框架可先搭，任务内容等客户）
-5. **看板系统**（需前面所有模块数据）
+1. **费用管控 Charge**（权限限总务+管理员）
+2. **托管入档 TenantRegister**（需办件先完成）
+3. **任务 Task**（框架可先搭，任务内容等客户）
+4. **看板系统**（需前面所有模块数据）
 
 ---
 
@@ -230,4 +242,4 @@ curl -s --noproxy "*" http://localhost:3000/customers \
 
 ---
 
-> 最后更新：2026-06-06
+> 最后更新：2026-06-07

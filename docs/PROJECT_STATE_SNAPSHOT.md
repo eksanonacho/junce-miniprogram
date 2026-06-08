@@ -10,7 +10,7 @@
 
 ## 快照时间
 
-**2026-06-07**
+**2026-06-08**(晚)
 
 ---
 
@@ -27,11 +27,9 @@
 | ServiceItems + StaffAssignment(后端接口) | ✅ 已完成 |
 | Users 查询接口 | ✅ 已完成 |
 | WorkOrder 办件流转 / 办结打卡(含409优化) | ✅ 已完成 |
+| Charge 费用管控 + 催收 | ✅ 已完成 |
+| TenantRegister 托管入档 | ✅ 已完成 |
 | 前端(客户模块页面) | 🔄 进行中(同学开发) |
-| 费用管控 Charge | ⬜ 未开始 |
-| 费用 Charge | ⬜ 未开始 |
-| 人员配置 StaffAssignment | ⬜ 未开始 |
-| 托管入档 TenantRegister | ⬜ 未开始 |
 | 任务 Task | ⏳ 等客户(任务内容) |
 | 业务裂变 Fission | ⬜ 未开始 |
 | 看板(服务/老板/客户) | ⬜ 未开始 |

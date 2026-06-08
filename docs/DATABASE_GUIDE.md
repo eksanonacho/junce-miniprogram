@@ -3,13 +3,13 @@
 > **这个文件是给谁看的**:任何要碰数据库的开发者(或 AI)。
 > **什么时候用**:理解现有表结构、新建表、改字段、排查数据问题前。
 > **解决什么问题**:看懂数据库目前怎么设计、哪些表已完成、哪些后续要加、改库的规矩是什么。
-> 最后更新:2026-06-06(凌晨)。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。
+> 最后更新:2026-06-08(晚)。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。
 
 ---
 
 ## 一、当前已实现表
 
-目前数据库共 10 张表:8 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
+目前数据库共 13 张表:11 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
 
 ### 1.1 roles — 角色主数据表
 - **用途**:存系统的 6 种岗位角色,是权限体系的基础。
@@ -133,6 +133,49 @@
   - PATCH 不允许直接改 status="已打卡"，必须通过 POST check-in
   - check-in 必须传 archiveFiles(至少1项)，空返回 400
   - status 改"办结"时自动写 completedAt
+
+### 1.10 charges — 收费记录表
+- **用途**:客户的收费标准、合同号、发票号、收费状态。
+- **主键**:id
+- **关键字段**:
+  - `customerId`:外键 → customers.id，UNIQUE(MVP 一个客户一条)
+  - `chargeMode`:枚举 ChargeMode(一次性/定金加尾款)
+  - `amount`:金额，**@db.Decimal(12,2)**
+  - `chargeStatus`:枚举 ChargeStatus(已收/未收)，默认未收
+  - `contractNo`/`invoiceNo`:合同号/发票号
+  - `confirmedBy`:外键 → users.id，总务确认人
+  - `confirmedAt`:DateTime，确认时间
+- **外键**:customerId → customers, confirmedBy → users
+- **金额字段**:amount，Decimal(12,2)
+- **权限硬约束**:PATCH/confirm/remind 限总务+管理员(@Roles)。PATCH 不允许改 chargeStatus。
+
+### 1.11 collection_reminders — 催收记录表
+- **用途**:记录总务/管理员向主理人发起的每次催收。
+- **主键**:id
+- **关键字段**:
+  - `chargeId`:外键 → charges.id
+  - `fromUserId`:外键 → users.id，催收发起人
+  - `toUserId`:外键 → users.id，催收对象（不传默认客户主理人）
+  - `message`:催收备注
+- **外键**:chargeId → charges, fromUserId → users, toUserId → users
+- **金额字段**:无
+- **说明**:只在未收状态下可发起，已收后返回 400。
+
+### 1.12 tenant_registers — 托管入档表(仅代理户)
+- **用途**:代理户客户的企业详细概况、服务方案、主理人确认、会计分派与确认。
+- **主键**:id
+- **关键字段**:
+  - `customerId`:UNIQUE，一个客户一条。**仅代理户可创建**
+  - `enterpriseDetail`/`servicePlan`:JSON，内容等客户补充(TODO)
+  - `planConfirmedByOwner`/`planConfirmedAt`:主理人确认
+  - `assignedAccountantId`:被分派的会计(FK→users)。通过单独接口 `/assign-accountant` 设置
+  - `assignConfirmed`/`assignConfirmedAt`:会计确认
+- **外键**:customerId → customers, assignedAccountantId → users
+- **金额字段**:无
+- **权限**:
+  - 创建/PATCH:会计/主管/管理员
+  - 分派会计:主管/管理员
+  - 会计确认:会计本人或管理员(非本人 403)
 
 ---
 

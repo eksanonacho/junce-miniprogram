@@ -484,7 +484,94 @@
 
 ---
 
-## 八、枚举值说明
+## 八、Charge 费用管控接口
+
+> **权限硬约束**：PATCH / confirm / remind 限 **总务 + 管理员**（首次启用 @Roles()），商务/业务/会计/主管访问返回 403。
+
+### 8.1 POST /charges — 创建收费记录
+- **方法**:POST
+- **URL**:`/charges`
+- **是否需要 token**:是（一期所有登录角色，TODO: 后续可能限商务/总务/管理员）
+- **Body**:
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| customerId | number | 是 | 客户 ID |
+| chargeMode | 枚举 | 是 | `一次性` / `定金加尾款` |
+| amount | number | 是 | 金额，Decimal(12,2)，≥0 |
+| contractNo | string | 否 | 合同号 |
+| invoiceNo | string | 否 | 发票号 |
+
+- **规则**:同一客户只能一条 charge（重复返回 409 + existingCharge）。
+
+### 8.2 GET /charges — 查询收费
+- **方法**:GET
+- **Query**:`customerId` / `chargeStatus`（`已收`/`未收`），可选组合。
+
+### 8.3 GET /charges/:id — 收费详情
+- **方法**:GET
+
+### 8.4 PATCH /charges/:id — 修改收费信息 ⚠️
+- **权限**:**总务 + 管理员**（@Roles）
+- **Body**(全部可选):`chargeMode` / `amount` / `contractNo` / `invoiceNo`
+- **禁止修改**:`chargeStatus`、`confirmedBy`、`confirmedAt`。状态变更只能通过 confirm。
+
+### 8.5 POST /charges/:id/confirm — 确认已收费 ⚠️
+- **权限**:**总务 + 管理员**（@Roles）
+- **效果**:chargeStatus → `已收`，confirmedBy → 当前用户，confirmedAt → 当前时间
+- **前置**:必须是 `未收`，否则 400
+
+### 8.6 POST /charges/:id/remind — 发起催收 ⚠️
+- **权限**:**总务 + 管理员**（@Roles）
+- **Body**:
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| toUserId | number | 否 | 催收对象，不传默认客户主理人 |
+| message | string | 否 | 催收备注 |
+
+- **前置**:必须是 `未收`，已收后催收返回 400
+
+### 8.7 GET /charges/:id/reminders — 查催收记录
+- **方法**:GET
+
+---
+
+## 九、TenantRegister 托管入档接口（仅代理户）
+
+> **硬约束**：只有 `customerCategory=代理户` 的客户才能创建，非代理户返回 400。
+
+### 9.1 POST /tenant-registers — 创建托管入档 ⚠️
+- **权限**：`@Roles('会计','主管','管理员')`
+- **Body**：`{ customerId, enterpriseDetail?, servicePlan? }` — 两个 JSON 字段内容等客户补充
+- **校验**：customerCategory ≠ 代理户 → 400；重复 customerId → 409
+
+### 9.2 GET /tenant-registers/:id — 详情
+### 9.3 GET /tenant-registers?customerId=X — 查询
+
+### 9.4 PATCH /tenant-registers/:id ⚠️
+- **权限**：`@Roles('会计','主管','管理员')`
+- **只允许改**：`enterpriseDetail`、`servicePlan`
+- **不允许改**：assignedAccountantId（走 assign-accountant 接口）
+
+### 9.5 POST /tenant-registers/:id/confirm-plan
+- **权限**：所有登录角色
+- **效果**：planConfirmedByOwner → true
+- **TODO**：后续应限客户主理人 ownerId 或管理员
+
+### 9.6 POST /tenant-registers/:id/assign-accountant ⚠️
+- **权限**：`@Roles('主管','管理员')`
+- **Body**：`{ "accountantId": 3 }`
+- **校验**：accountantId 用户必须存在且角色为"会计"，否则 400
+
+### 9.7 POST /tenant-registers/:id/confirm-assignment ⚠️
+- **权限**：`@Roles('会计','管理员')`
+- **规则**：会计角色必须为 assignedAccountantId 本人，否则 403；管理员可代确认
+- **前置**：assignedAccountantId 不为空，assignConfirmed 为 false
+
+---
+
+## 十、枚举值说明
 
 > ⚠️ **前端必须使用后端实际接受的枚举值,一字不差,不允许自己编。** 传错值会返回 400。
 
@@ -497,12 +584,14 @@
 | RoleCode | (用户角色) | `商务`、`业务`、`会计`、`主管`、`总务`、`管理员` |
 | ItemStatus | status(服务项) | `待办`、`办件中`、`办结` |
 | WorkOrderStatus | status(办件) | `待办`、`办件中`、`办结`、`已打卡` |
+| ChargeMode | chargeMode | `一次性`、`定金加尾款` |
+| ChargeStatus | chargeStatus | `已收`、`未收` |
 
 > 注:roleCode 的实际显示值以后端 seed 数据为准(角色名如"管理员/老板")。前端如需展示角色,用登录返回的 roleCode / roleName。
 
 ---
 
-## 九、curl 测试示例(已验证)
+## 十一、curl 测试示例(已验证)
 
 > 本机若开代理/VPN,localhost 请求会返回 502,所有命令已加 `--noproxy "*"`。
 

@@ -70,6 +70,18 @@ enum WorkOrderStatus {
   已打卡   // 已完成系统打卡，且 archiveFiles 已记录
 }
 
+// 收费方式
+enum ChargeMode {
+  一次性
+  定金加尾款
+}
+
+// 收费状态
+enum ChargeStatus {
+  已收
+  未收
+}
+
 // ---- 角色表 ----
 model Role {
   id        Int       @id @default(autoincrement())
@@ -114,6 +126,14 @@ model User {
   // 该用户作为回执接收人的办件
   receiptWorkOrders    WorkOrder[] @relation("WorkOrderReceiptReceiver")
 
+  // 收费确认/催收
+  chargeConfirmations  Charge[] @relation("ChargeConfirmer")
+  sentReminders        CollectionReminder[] @relation("ReminderFrom")
+  receivedReminders    CollectionReminder[] @relation("ReminderTo")
+
+  // 被分派的托管入档
+  tenantAssignments    TenantRegister[] @relation("TenantAccountant")
+
   @@map("users")
 }
 
@@ -150,6 +170,12 @@ model Customer {
 
   // 该客户的办件
   workOrders       WorkOrder[]
+
+  // 该客户的收费
+  charge           Charge?
+
+  // 该客户的托管入档
+  tenantRegister   TenantRegister?
 
   @@map("customers")
 }
@@ -254,4 +280,61 @@ model WorkOrder {
   receiptReceiver   User?            @relation("WorkOrderReceiptReceiver", fields: [receiptReceiverId], references: [id])
 
   @@map("work_orders")
+}
+
+// ---- 收费记录表 ----
+model Charge {
+  id            Int           @id @default(autoincrement())
+  customerId    Int           @unique @map("customer_id") // MVP: 一个客户一条收费记录
+  chargeMode    ChargeMode    @map("charge_mode")
+  amount        Decimal       @db.Decimal(12, 2)
+  chargeStatus  ChargeStatus  @default(未收) @map("charge_status")
+  contractNo    String?       @map("contract_no")
+  invoiceNo     String?       @map("invoice_no")
+  confirmedBy   Int?          @map("confirmed_by")
+  confirmedAt   DateTime?     @map("confirmed_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt      @map("updated_at")
+
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  confirmer     User?         @relation("ChargeConfirmer", fields: [confirmedBy], references: [id])
+  reminders     CollectionReminder[]
+
+  @@map("charges")
+}
+
+// ---- 催收记录表 ----
+model CollectionReminder {
+  id          Int       @id @default(autoincrement())
+  chargeId    Int       @map("charge_id")
+  fromUserId  Int       @map("from_user_id")
+  toUserId    Int       @map("to_user_id")
+  message     String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  charge      Charge    @relation(fields: [chargeId], references: [id])
+  fromUser    User      @relation("ReminderFrom", fields: [fromUserId], references: [id])
+  toUser      User      @relation("ReminderTo", fields: [toUserId], references: [id])
+
+  @@map("collection_reminders")
+}
+
+// ---- 托管入档表（仅代理户） ----
+model TenantRegister {
+  id                    Int       @id @default(autoincrement())
+  customerId            Int       @unique @map("customer_id") // 一个客户一条
+  enterpriseDetail      Json?     @map("enterprise_detail")   // TODO: 字段等客户给
+  servicePlan           Json?     @map("service_plan")        // TODO: 内容等客户给
+  planConfirmedByOwner  Boolean   @default(false) @map("plan_confirmed_by_owner")
+  planConfirmedAt       DateTime? @map("plan_confirmed_at")
+  assignedAccountantId  Int?      @map("assigned_accountant_id")
+  assignConfirmed       Boolean   @default(false) @map("assign_confirmed")
+  assignConfirmedAt     DateTime? @map("assign_confirmed_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt      @map("updated_at")
+
+  customer              Customer  @relation(fields: [customerId], references: [id])
+  assignedAccountant    User?     @relation("TenantAccountant", fields: [assignedAccountantId], references: [id])
+
+  @@map("tenant_registers")
 }

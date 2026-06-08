@@ -7,6 +7,8 @@ import { ServiceItemsModule } from './service-items/service-items.module';
 import { StaffAssignmentsModule } from './staff-assignments/staff-assignments.module';
 import { UsersModule } from './users/users.module';
 import { WorkOrdersModule } from './work-orders/work-orders.module';
+import { ChargesModule } from './charges/charges.module';
+import { TenantRegistersModule } from './tenant-registers/tenant-registers.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -20,6 +22,8 @@ import { AppService } from './app.service';
     StaffAssignmentsModule,
     UsersModule,
     WorkOrdersModule,
+    ChargesModule,
+    TenantRegistersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

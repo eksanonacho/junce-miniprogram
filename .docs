@@ -529,7 +529,69 @@ ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键
 - `work-orders.service.ts`：`ConflictException` 从纯字符串改为结构化对象，包含 `statusCode`、`message`、`error`、`existingWorkOrder`（含 id/customerId/serviceItemId/status/handlerId/receiptReceiverId/createdAt/serviceName）
 
 ### 回归验证
-14/14 全绿：
+14/14 全绿。
+
+---
+
+## 2026-06-08 第12步：Charge 费用管控模块
+
+### 做了什么
+实现收费记录 + 总务审核 + 催收的完整后端。**首次启用 @Roles() 细粒度权限控制**。
+
+### 新增数据库
+- charges: customerId(UNIQUE) + chargeMode(一次性/定金加尾款) + amount(Decimal12,2) + chargeStatus(已收/未收) + contractNo/invoiceNo + confirmedBy/confirmedAt
+- collection_reminders: chargeId + fromUserId + toUserId + message
+- 枚举: ChargeMode(一次性/定金加尾款) + ChargeStatus(已收/未收)
+
+### 权限设计(首次 @Roles 实战)
+| 接口 | 权限 |
+|------|------|
+| POST /charges | 所有登录角色(TODO:后续限商务/总务/管理员) |
+| GET /charges | 所有登录角色 |
+| PATCH /charges/:id | **总务+管理员**(@Roles) |
+| POST confirm | **总务+管理员**(@Roles) |
+| POST remind | **总务+管理员**(@Roles) |
+
+### 关键业务规则
+1. PATCH 不允许改 chargeStatus/confirmedBy/confirmedAt
+2. confirm 只能 未收→已收; 已收后再 confirm → 400
+3. remind 只能在未收状态; 已收后 → 400
+4. remind 的 toUserId 可选,不传默认客户主理人 ownerId
+5. GET /charges 支持 customerId + chargeStatus 筛选
+6. 重复创建返回 409 + existingCharge
+
+### 验证结果
+10/10 全部通过: 商务创建✅、商务PATCH→403✅、商务confirm→403✅、商务remind→403✅、总务催收(默认主理人)✅、总务确认已收✅、已收后催收→400✅、筛选✅、管理员确认✅、无token→401✅
+
+---
+
+## 2026-06-08(晚) 第13步：TenantRegister 托管入档模块
+
+### 做了什么
+实现业务链路第三步——仅代理户的托管入档登记、方案确认、会计分派与确认。
+
+### 新增数据库
+- tenant_registers: customerId(UNIQUE,仅代理户) + enterpriseDetail(Json) + servicePlan(Json) + planConfirmedByOwner/planConfirmedAt + assignedAccountantId + assignConfirmed/assignConfirmedAt
+
+### 关键设计
+1. **仅代理户可创建**: customerCategory ≠ 代理户 → 400
+2. **分派会计独立接口**: POST /:id/assign-accountant，不在 PATCH 里混
+3. **会计本人校验**: confirm-assignment 时，会计角色必须等于 assignedAccountantId 本人，管理员可代确认
+4. **confirm-plan**: 所有登录角色可确认，TODO 限客户主理人
+
+### 权限（@Roles 多重角色）
+| 接口 | 权限 |
+|------|------|
+| POST 创建 | 会计/主管/管理员 |
+| PATCH 更新 | 会计/主管/管理员 |
+| assign-accountant | 主管/管理员 |
+| confirm-assignment | 会计/管理员(会计须本人) |
+| confirm-plan | 所有登录角色 |
+
+### 验证结果
+11/11 全部通过: 商务403✅、会计创建代理户✅、非代理户400✅、主管分派会计✅、分派非会计400✅、商务confirm-plan✅、会计本人confirm✅、业务岗confirm→403✅、管理员代确认✅、无token→401✅、PATCH更新概况✅
+
+> docs/TESTING_GUIDE.md 已同步补齐（第七节，7 条测试命令）。
 - WorkOrder: 创建、重复409+existingWorkOrder、列表、办件中、办结+归档、打卡、401
 - Auth /me ✅
 - Customers 详情 ✅
