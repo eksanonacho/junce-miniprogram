@@ -652,7 +652,36 @@
 
 ---
 
-## 十三、枚举值说明
+## 十三、Files 文件上传接口
+
+### 13.1 POST /files/upload — 单文件上传
+- **用途**：上传办件归档材料、裂变凭证等。返回对象可直接放入 WorkOrder check-in 的 archiveFiles 数组。
+- **方法**：POST
+- **URL**：`/files/upload`
+- **Content-Type**：`multipart/form-data`
+- **字段名**：`file`
+- **是否需要 token**：是
+- **限制**：
+  - 单文件，最大 10MB
+  - 扩展名白名单：`.pdf .png .jpg .jpeg .doc .docx .xls .xlsx`
+  - MIME 辅助校验，`application/octet-stream` 仅作 Office 文件兜底（TODO: 上线前收紧）
+- **返回**：
+```json
+{
+  "name": "营业执照.pdf",
+  "url": "/uploads/1780999887987-xxx.pdf",
+  "size": 1024000,
+  "mimeType": "application/pdf",
+  "uploadedAt": "2026-06-09T..."
+}
+```
+- **静态访问**：`http://localhost:3000/uploads/xxx.pdf`
+- **archiveFiles 兼容**：返回对象字段（name/url/size/mimeType/uploadedAt）完全兼容 WorkOrder check-in 的 archiveFiles（Json 字段，无字段限制）。
+- **错误**：无token→401、非法扩展名→400、非法MIME→400、>10MB→413
+
+---
+
+## 十四、枚举值说明
 
 ### 12.2 GET /dashboard/customers — 客户看板
 - **返回**：`total`、`byCategory`(新用户/代理户)、`byTier`(VIP/优质/中低/零申报)、`byLifecycleStage`
@@ -685,7 +714,7 @@
 
 ---
 
-## 十四、curl 测试示例(已验证)
+## 十五、curl 测试示例(已验证)
 
 > 本机若开代理/VPN,localhost 请求会返回 502,所有命令已加 `--noproxy "*"`。
 

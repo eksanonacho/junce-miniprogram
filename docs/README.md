@@ -81,7 +81,7 @@ junce-miniprogram/
 | 模块 | 内容 | 状态 |
 |------|------|------|
 | **地基** | Node/pnpm/PG/Docker、项目骨架、git | ✅ |
-| **数据库** | 7 张业务表 + 6 个枚举 | ✅ |
+| **数据库** | 11 张业务表 + 8 个枚举 | ✅ |
 | **Auth** | JWT 登录、bcrypt 密码 | ✅ |
 | **RBAC** | JwtAuthGuard + RolesGuard + @Roles() | ✅ |
 | **Customers** | 客户 CRUD、筛选搜索、ownerId 自动注入 | ✅ |
@@ -91,8 +91,11 @@ junce-miniprogram/
 | **WorkOrder** | 办件流转、状态机、办结打卡、归档必传、409+existingWorkOrder | ✅ |
 | **Charge** | 收费记录、总务审核、催收、@Roles 实战(总务+管理员) | ✅ |
 | **TenantRegister** | 托管入档(仅代理户)、方案确认、会计分派、本人校验 | ✅ |
+| **Task** | 通用任务流转、确认/完成、管理员代操作 | ✅ |
+| **Dashboard** | 5 统计接口、纯聚合查询、@Roles(主管+管理员) | ✅ |
+| **Files** | multer 本地存储、10MB 限制、扩展名白名单 | ✅ |
 
-### 当前接口清单（35 个）
+### 当前接口清单（47 个）
 
 ```
 POST   /auth/login                          # 登录
@@ -138,6 +141,20 @@ PATCH  /tenant-registers/:id                  # 更新概况/方案
 POST   /tenant-registers/:id/confirm-plan     # 主理人确认方案
 POST   /tenant-registers/:id/assign-accountant # 分派会计(主管+管理员)
 POST   /tenant-registers/:id/confirm-assignment # 会计确认分派(须本人)
+
+POST   /tasks                                 # 创建任务
+GET    /tasks                                 # 任务列表
+PATCH  /tasks/:id                             # 更新任务
+POST   /tasks/:id/confirm                     # 确认任务
+POST   /tasks/:id/complete                    # 完成任务
+
+GET    /dashboard/overview                    # 老板总览
+GET    /dashboard/customers                   # 客户看板
+GET    /dashboard/services                    # 服务看板
+GET    /dashboard/tasks                       # 任务看板
+GET    /dashboard/charges                     # 收费看板
+
+POST   /files/upload                          # 文件上传
 ```
 
 全部已 curl 验证通过（正向 + 反向 401/403）。
@@ -163,8 +180,15 @@ POST   /tenant-registers/:id/confirm-assignment # 会计确认分派(须本人)
 | `charges` | ~ | 收费记录 |
 | `collection_reminders` | ~ | 催收记录 |
 | `tenant_registers` | ~ | 托管入档(仅代理户) |
+| `tasks` | ~ | 任务 |
 
-### 枚举（6 个）
+### 枚举（10 个）
+
+`RoleCode` / `CompanyType` / `CustomerCategory` / `CustomerTier` / `LifecycleStage` / `ItemStatus` / `WorkOrderStatus` / `ChargeMode` / `ChargeStatus` / `TaskStatus`
+
+### Files 模块（无新表）
+
+文件通过 multer 存本地 `server/uploads/`，不建数据库表。
 
 `RoleCode` / `CompanyType` / `CustomerCategory` / `CustomerTier` / `LifecycleStage` / `ItemStatus`
 
@@ -235,9 +259,8 @@ curl -s --noproxy "*" http://localhost:3000/customers \
 ## 九、下一步
 
 按 [ROADMAP.md](ROADMAP.md)：
-1. **任务 Task**（框架可先搭，任务内容等客户）
-2. **业务裂变 Fission**（简化版：填单+确认+归档）
-3. **看板系统**（需前面所有模块数据）
+1. **业务裂变 Fission**（简化版：填单+确认+归档）
+2. **经营/工资看板**（手动录入+汇总展示）
 
 ---
 
@@ -262,4 +285,4 @@ curl -s --noproxy "*" http://localhost:3000/customers \
 
 ---
 
-> 最后更新：2026-06-08
+> 最后更新：2026-06-09

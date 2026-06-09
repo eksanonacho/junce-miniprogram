@@ -666,3 +666,26 @@ ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键
 7/7 全部通过：管理员 overview✅、主管 customers✅、管理员 services/tasks/charges✅、商务→403✅、无token→401✅、金额类型=int(number)✅
 
 > 文档同步完成：TESTING_GUIDE 已补齐第九节(7条测试)、DATABASE_GUIDE 已注明 Dashboard 无表、ROADMAP 已标记模块 10 完成、API_CONTRACT 完整。
+
+---
+
+## 2026-06-09(深夜) 第16步：Files 文件上传模块
+
+### 做了什么
+实现文件上传基础能力——multer 本地存储 + ServeStaticModule 静态访问。
+
+### 新增文件
+- src/files/multer.config.ts（扩展名白名单+MIME校验+10MB限制）
+- src/files/files.controller.ts（POST /files/upload）
+- src/files/files.module.ts
+- server/uploads/（本地存储目录）
+
+### 关键设计
+1. 0 新表, 0 migration：文件存磁盘，元数据由调用方存入 JSON 字段
+2. 文件名：timestamp+UUID+ext，防重名和路径穿越
+3. 类型校验：扩展名白名单 + MIME辅助 + octet-stream兜底（TODO: 收紧）
+4. 返回对象可直接放入 WorkOrder check-in 的 archiveFiles 数组
+5. 依赖：@nestjs/serve-static + @types/multer
+
+### 验证结果
+7/7 全部通过：PDF上传✅、PNG上传✅、无token→401✅、.exe→400✅、>10MB→413✅、静态URL可访问200✅、archiveFiles兼容✅

@@ -3,7 +3,7 @@
 > **这个文件是给谁看的**:任何改完代码、要确认没改坏系统的人(或 AI)。
 > **什么时候用**:每次改代码后做回归测试;新模块开发完做验证;排查"是不是哪里坏了"。
 > **解决什么问题**:照着跑一遍,快速确认核心功能(登录/权限/客户)还正常。
-> 最后更新:2026-06-08(深夜)。所有 curl 命令均已实测通过。
+> 最后更新:2026-06-09。所有 curl 命令均已实测通过。
 
 ---
 
@@ -482,7 +482,66 @@ curl -s --noproxy "*" http://localhost:3000/dashboard/overview | python3 -m json
 
 ---
 
-## 十、前端联调测试(前端做完后逐项验)
+## 十、Files 文件上传测试
+
+> ⚠️ POST /files/upload 需要 JwtAuthGuard。文件大小限制 10MB，扩展名白名单 pdf/png/jpg/jpeg/doc/docx/xls/xlsx。
+
+### 准备
+```bash
+TOKEN=$(curl ... username:admin)
+echo "test pdf content" > /tmp/test.pdf
+echo "test png content" > /tmp/test.png
+echo "virus" > /tmp/test.exe
+dd if=/dev/zero of=/tmp/big.pdf bs=1m count=11 2>/dev/null
+```
+
+### 1. 上传 PDF
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/files/upload \
+  -H "Authorization: Bearer $TOKEN" -F "file=@/tmp/test.pdf" | python3 -m json.tool
+```
+**预期**:200，返回 `{ name, url, size, mimeType, uploadedAt }`。
+
+### 2. 上传 PNG
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/files/upload \
+  -H "Authorization: Bearer $TOKEN" -F "file=@/tmp/test.png" | python3 -m json.tool
+```
+**预期**:200。
+
+### 3. 无 token → 401
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/files/upload -F "file=@/tmp/test.pdf" | python3 -m json.tool
+```
+**预期**:401。
+
+### 4. .exe → 400
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/files/upload \
+  -H "Authorization: Bearer $TOKEN" -F "file=@/tmp/test.exe" | python3 -m json.tool
+```
+**预期**:400，`不支持的文件类型 ".exe"`。
+
+### 5. >10MB → 413
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/files/upload \
+  -H "Authorization: Bearer $TOKEN" -F "file=@/tmp/big.pdf" | python3 -m json.tool
+```
+**预期**:413 或 400（File too large）。
+
+### 6. 返回 url 可访问
+```bash
+# 用步骤1返回的 url，如 /uploads/xxx.pdf
+curl -s --noproxy "*" -o /dev/null -w "%{http_code}" http://localhost:3000/uploads/xxx.pdf
+```
+**预期**:200。
+
+### 7. upload 返回可放入 archiveFiles
+上传返回的对象直接作为 check-in 的 `archiveFiles` 数组元素，格式兼容（Json 字段，无字段限制）。
+
+---
+
+## 十一、前端联调测试(前端做完后逐项验)
 
 | 测试项 | 怎么验 | 预期 |
 |---|---|---|
@@ -495,7 +554,7 @@ curl -s --noproxy "*" http://localhost:3000/dashboard/overview | python3 -m json
 
 ---
 
-## 十一、回归测试顺序(每次改代码后照做)
+## 十二、回归测试顺序(每次改代码后照做)
 
 1. **`pnpm build`** — 先确认能编译通过(0 errors)。
 2. **启动后端** — `pnpm start:dev`,看到 successfully started。
@@ -507,13 +566,14 @@ curl -s --noproxy "*" http://localhost:3000/dashboard/overview | python3 -m json
 8. **TenantRegister 测试** — 跑第七节,确认代理户/403/400/分派/本人确认/401 都对。
 9. **Task 测试** — 跑第八节,确认主管创建/403/非本人403/确认/完成/400/PATCH/401 都对。
 10. **Dashboard 测试** — 跑第九节,确认 overview/customers/services/tasks/charges/403/401/金额number 都对。
-11. **前端页面测试** — 跑第十节(如果改动涉及前端)。
+11. **Files 测试** — 跑第十节,确认 PDF上传/PNG/401/400/413/静态访问 都对。
+12. **前端页面测试** — 跑第十一节(如果改动涉及前端)。
 
 > 原则:改了后端,至少跑 Auth + Customers;改了某个模块,重点测那个模块 + 它依赖的(如改客户必连带测登录)。
 
 ---
 
-## 十二、常见测试问题
+## 十三、常见测试问题
 
 | 问题 | 现象 | 解决 |
 |---|---|---|

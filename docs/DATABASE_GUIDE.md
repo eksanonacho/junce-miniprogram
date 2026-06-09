@@ -3,7 +3,7 @@
 > **这个文件是给谁看的**:任何要碰数据库的开发者(或 AI)。
 > **什么时候用**:理解现有表结构、新建表、改字段、排查数据问题前。
 > **解决什么问题**:看懂数据库目前怎么设计、哪些表已完成、哪些后续要加、改库的规矩是什么。
-> 最后更新:2026-06-08(深夜)。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。
+> 最后更新:2026-06-09。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。
 
 ---
 
@@ -195,6 +195,10 @@
 
 ### Dashboard 看板模块(无新表)
 Dashboard 模块不新增数据库表，仅基于已有表（customers/service_items/work_orders/tasks/charges/collection_reminders）做只读统计，查询方式：Prisma count()/groupBy()/aggregate({ _sum })。
+
+### Files 文件上传模块(无新表)
+
+Files 模块不新增数据库表。文件通过 multer 写入本地磁盘 `server/uploads/`，文件名使用 `timestamp+UUID+ext` 防重名和路径穿越。文件访问通过 `ServeStaticModule` 挂载 `/uploads` 路径。上传返回的元数据（name/url/size/mimeType/uploadedAt）可直接放入 WorkOrder.archiveFiles JSON 字段。
 
 ---
 
