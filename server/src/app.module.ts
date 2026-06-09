@@ -10,6 +10,7 @@ import { WorkOrdersModule } from './work-orders/work-orders.module';
 import { ChargesModule } from './charges/charges.module';
 import { TenantRegistersModule } from './tenant-registers/tenant-registers.module';
 import { TasksModule } from './tasks/tasks.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -26,6 +27,7 @@ import { AppService } from './app.service';
     ChargesModule,
     TenantRegistersModule,
     TasksModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

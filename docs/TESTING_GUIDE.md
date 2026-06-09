@@ -433,7 +433,56 @@ curl -s --noproxy "*" http://localhost:3000/tasks | python3 -m json.tool
 
 ---
 
-## 九、前端联调测试(前端做完后逐项验)
+## 九、Dashboard 看板测试
+
+> ⚠️ 所有接口限 `@Roles('主管','管理员')`，商务访问返回 403。
+> ⚠️ 金额字段 collectedAmount/unpaidAmount 返回 number，仅用于前端展示。
+
+### 登录
+```bash
+TOKEN_AD=$(curl ... username:admin)    # 管理员
+TOKEN_ZG=$(curl ... username:zhuguan)  # 主管
+TOKEN_SW=$(curl ... username:shangwu)  # 商务
+```
+
+### 1. 管理员 overview
+```bash
+curl -s --noproxy "*" http://localhost:3000/dashboard/overview \
+  -H "Authorization: Bearer $TOKEN_AD" | python3 -m json.tool
+```
+**预期**:200，返回 customers(含 activeCount)/serviceItems/workOrders/tasks/charges 五组统计。
+
+### 2. 主管 customers
+```bash
+curl -s --noproxy "*" http://localhost:3000/dashboard/customers \
+  -H "Authorization: Bearer $TOKEN_ZG" | python3 -m json.tool
+```
+**预期**:200，total + byCategory + byTier + byLifecycleStage。
+
+### 3-5. services / tasks / charges
+```bash
+curl -s --noproxy "*" http://localhost:3000/dashboard/services -H "Authorization: Bearer $TOKEN_AD" | python3 -m json.tool
+curl -s --noproxy "*" http://localhost:3000/dashboard/tasks -H "Authorization: Bearer $TOKEN_AD" | python3 -m json.tool
+curl -s --noproxy "*" http://localhost:3000/dashboard/charges -H "Authorization: Bearer $TOKEN_AD" | python3 -m json.tool
+```
+**预期**:200，charges 的 collectedAmount/unpaidAmount 为 **number**(不是 string)。
+
+### 6. 商务 → 403
+```bash
+curl -s --noproxy "*" http://localhost:3000/dashboard/overview \
+  -H "Authorization: Bearer $TOKEN_SW" | python3 -m json.tool
+```
+**预期**:403。
+
+### 7. 无 token → 401
+```bash
+curl -s --noproxy "*" http://localhost:3000/dashboard/overview | python3 -m json.tool
+```
+**预期**:401。
+
+---
+
+## 十、前端联调测试(前端做完后逐项验)
 
 | 测试项 | 怎么验 | 预期 |
 |---|---|---|
@@ -446,7 +495,7 @@ curl -s --noproxy "*" http://localhost:3000/tasks | python3 -m json.tool
 
 ---
 
-## 十、回归测试顺序(每次改代码后照做)
+## 十一、回归测试顺序(每次改代码后照做)
 
 1. **`pnpm build`** — 先确认能编译通过(0 errors)。
 2. **启动后端** — `pnpm start:dev`,看到 successfully started。
@@ -457,13 +506,14 @@ curl -s --noproxy "*" http://localhost:3000/tasks | python3 -m json.tool
 7. **Charge 测试** — 跑第六节,确认 403/催收/确认/400 都对。
 8. **TenantRegister 测试** — 跑第七节,确认代理户/403/400/分派/本人确认/401 都对。
 9. **Task 测试** — 跑第八节,确认主管创建/403/非本人403/确认/完成/400/PATCH/401 都对。
-10. **前端页面测试** — 跑第九节(如果改动涉及前端)。
+10. **Dashboard 测试** — 跑第九节,确认 overview/customers/services/tasks/charges/403/401/金额number 都对。
+11. **前端页面测试** — 跑第十节(如果改动涉及前端)。
 
 > 原则:改了后端,至少跑 Auth + Customers;改了某个模块,重点测那个模块 + 它依赖的(如改客户必连带测登录)。
 
 ---
 
-## 十一、常见测试问题
+## 十二、常见测试问题
 
 | 问题 | 现象 | 解决 |
 |---|---|---|

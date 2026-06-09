@@ -635,3 +635,34 @@ ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键
 - ServiceTemplates 列表 ✅
 - Users 筛选 ✅
 - pnpm build 0 错误 ✅
+
+---
+
+## 2026-06-09 第15步：Dashboard 看板接口
+
+### 做了什么
+实现第一期看板统计接口——纯聚合查询，不新增表。
+
+### 新增文件
+- src/dashboard/dashboard.controller.ts（5 个接口, @Roles('主管','管理员')）
+- src/dashboard/dashboard.service.ts（Prisma count/groupBy/aggregate）
+- src/dashboard/dashboard.module.ts
+
+### 关键设计
+1. 0 张新表, 0 migration：全部基于已有 8 张业务表做 count/groupBy/_sum
+2. 金额返回 number：SUM(Decimal) → Number(.toString())，仅用于展示
+3. activeCount = lifecycleStage !== "出库"
+4. overdue = status ≠ 已完成 AND deadline < now
+5. 权限：@Roles('主管','管理员')，商务→403
+
+### 5 个接口
+- GET /dashboard/overview（总览 5 维度）
+- GET /dashboard/customers（byCategory/byTier/byStage）
+- GET /dashboard/services（服务项+办件 byStatus）
+- GET /dashboard/tasks（byStatus+overdue）
+- GET /dashboard/charges（collected/unpaid 金额+数量+催收）
+
+### 验证结果
+7/7 全部通过：管理员 overview✅、主管 customers✅、管理员 services/tasks/charges✅、商务→403✅、无token→401✅、金额类型=int(number)✅
+
+> 文档同步完成：TESTING_GUIDE 已补齐第九节(7条测试)、DATABASE_GUIDE 已注明 Dashboard 无表、ROADMAP 已标记模块 10 完成、API_CONTRACT 完整。

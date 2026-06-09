@@ -193,6 +193,9 @@
 - **金额字段**:无
 - **权限**:创建/更新→主管+管理员。confirm/complete→toUserId 本人或管理员
 
+### Dashboard 看板模块(无新表)
+Dashboard 模块不新增数据库表，仅基于已有表（customers/service_items/work_orders/tasks/charges/collection_reminders）做只读统计，查询方式：Prisma count()/groupBy()/aggregate({ _sum })。
+
 ---
 
 ## 二、表关系

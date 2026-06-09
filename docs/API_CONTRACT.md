@@ -632,30 +632,39 @@
 
 ---
 
-## 十二、Dashboard 看板接口（待开发）
+## 十二、Dashboard 看板接口
 
-> ⚠️ **后端接口尚未开发。** 看板分两类：自动统计和手动录入。
+> **权限**：所有接口限 `@Roles('主管','管理员')`。商务/业务/会计/总务访问返回 403。
+> **金额**：`collectedAmount`/`unpaidAmount` 返回 number，仅用于前端展示，不用于二次财务计算。真实存储仍为 Decimal(12,2)。
 
-### 自动统计看板（真做）
-
-| 看板 | 用途 |
-|------|------|
-| 服务看板 | 服务项数量、状态分布、办件进度 |
-| 老板看板 | 全局经营概览（客户数/收入/办件数） |
-| 客户看板 | 客户数据统计（分层分布/生命周期分布） |
-
-### 半自动看板（手动录入 + 自动汇总）
-
-| 看板 | 用途 |
-|------|------|
-| 经营看板 | 手动录入收入+各项成本 → 系统汇总→利润可视化 |
-| 工资看板 | 手动录入各员工薪资项 → 系统汇总→可视化 |
-
-**一期不做**：自动反推佣金/成本、复杂周期汇总、自动生成确认函。
+### 12.1 GET /dashboard/overview — 老板总览
+- **返回**：
+```json
+{
+  "customers": { "total": 9, "activeCount": 9 },
+  "serviceItems": { "total": 5, "todo": 2, "inProgress": 2, "completed": 1 },
+  "workOrders": { "total": 4, "inProgress": 1 },
+  "tasks": { "total": 6, "pendingConfirm": 1, "inProgress": 2, "completed": 3 },
+  "charges": { "unpaidCount": 1, "collectedAmount": 80000, "unpaidAmount": 50000 }
+}
+```
+- **activeCount**：`lifecycleStage !== "出库"` 的客户数。
 
 ---
 
 ## 十三、枚举值说明
+
+### 12.2 GET /dashboard/customers — 客户看板
+- **返回**：`total`、`byCategory`(新用户/代理户)、`byTier`(VIP/优质/中低/零申报)、`byLifecycleStage`
+
+### 12.3 GET /dashboard/services — 服务看板
+- **返回**：`serviceItems.total`、`serviceItems.byStatus`、`workOrders.total`、`workOrders.byStatus`
+
+### 12.4 GET /dashboard/tasks — 任务看板
+- **返回**：`total`、`byStatus`、`overdue`（status≠已完成 且 deadline<now）
+
+### 12.5 GET /dashboard/charges — 收费看板
+- **返回**：`total`、`collectedCount`、`unpaidCount`、`collectedAmount`、`unpaidAmount`、`reminderCount`
 
 > ⚠️ **前端必须使用后端实际接受的枚举值,一字不差,不允许自己编。** 传错值会返回 400。
 
