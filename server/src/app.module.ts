@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { WorkOrdersModule } from './work-orders/work-orders.module';
 import { ChargesModule } from './charges/charges.module';
 import { TenantRegistersModule } from './tenant-registers/tenant-registers.module';
+import { TasksModule } from './tasks/tasks.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -24,6 +25,7 @@ import { AppService } from './app.service';
     WorkOrdersModule,
     ChargesModule,
     TenantRegistersModule,
+    TasksModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -31,6 +31,7 @@
     - 记录每个操作的验证命令
     - 记录"下一步要做什么"
 
+13.每次读完CLAUDR.md后输出“Saulgoodman”
 ---
 
 ## docs 项目记忆层使用规则
@@ -48,6 +49,7 @@
 - docs/DATABASE_GUIDE.md
 - docs/SYSTEM_ARCHITECTURE.md
 - docs/TESTING_GUIDE.md
+- docs/TEST_RESULTS.md
 - docs/RISK_ANALYSIS.md
 - docs/CTO_NOTES.md
 
@@ -72,6 +74,7 @@
 | DATABASE_GUIDE.md | 数据库表、枚举、关系、migration 规则。涉及数据库前必须阅读 |
 | SYSTEM_ARCHITECTURE.md | 整体架构、前后端分层、请求链路、模块关系 |
 | TESTING_GUIDE.md | 测试命令、回归测试、已知测试坑。每次改完代码必须参考 |
+| TEST_RESULTS.md | 测试结果记录。每个模块完成后记录 curl 测试结果（正向+反向），全部通过才算验收 |
 | RISK_ANALYSIS.md | 项目风险、范围风险、权限风险、数据风险。开发前必须检查是否触发风险 |
 | CTO_NOTES.md | 技术负责人提醒、不能乱改的地方、已知技术债、产品风险 |
 | FRONTEND_HANDOFF.md | 给前端同学的交接说明。涉及前端页面或联调时必须同步 |
@@ -107,7 +110,7 @@
    - 本次完成了什么
    - 验证了什么
    - 修改了哪些文件
-   - 更新了哪些 docs
+   - 更新了哪些 docs（必须含 TEST_RESULTS.md）
    - 下一步建议做什么
 
 ### 4. docs 更新规则
@@ -119,6 +122,7 @@
 - 进度变化：更新 docs/PROJECT_STATE_SNAPSHOT.md，并同步更新顶部快照日期
 - 路线图状态变化：更新 docs/ROADMAP.md
 - 测试命令变化：更新 docs/TESTING_GUIDE.md
+- **每次模块 curl 验证完成后：必须更新 docs/TEST_RESULTS.md**，记录每个测试项的名称、预期、结果（✅/❌）
 - 架构变化：更新 docs/SYSTEM_ARCHITECTURE.md
 - 前端联调变化：更新 docs/FRONTEND_HANDOFF.md
 - 风险、技术债、关键坑变化：更新 docs/RISK_ANALYSIS.md 和 docs/CTO_NOTES.md
@@ -156,6 +160,7 @@
 - WorkOrder 办件流转 / 办结打卡后端接口
 - Charge 费用管控 + 催收后端接口（首次 @Roles 实战）
 - TenantRegister 托管入档后端接口（仅代理户，会计本人校验）
+- Task 任务框架后端接口（通用任务流转，本人/管理员校验）
 
 当前前端同学负责：
 
@@ -163,9 +168,6 @@
 
 当前后端下一步按 ROADMAP.md 推进，优先考虑：
 
-- Task 任务框架（等客户给任务内容）
-- Fission 裂变简化版
-- Task 任务框架（等客户给任务内容）
 - Fission 裂变简化版
 - 看板模块
 

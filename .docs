@@ -592,6 +592,41 @@ ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键
 11/11 全部通过: 商务403✅、会计创建代理户✅、非代理户400✅、主管分派会计✅、分派非会计400✅、商务confirm-plan✅、会计本人confirm✅、业务岗confirm→403✅、管理员代确认✅、无token→401✅、PATCH更新概况✅
 
 > docs/TESTING_GUIDE.md 已同步补齐（第七节，7 条测试命令）。
+
+---
+
+## 2026-06-08(深夜) 第14步：Task 任务框架模块
+
+### 做了什么
+实现通用任务流转框架——主管发布任务→员工确认→员工完成，支持管理员代操作。
+
+### 新增数据库
+- tasks 表：title/content/fromUserId/toUserId/customerId(可空)/deadline/status/confirmedAt/confirmedById/completedAt/completedById
+- 枚举 TaskStatus：待确认→进行中→已完成
+
+### 关键设计
+1. **customerId 可空**：不传=通用任务，传了=关联特定客户
+2. **PATCH 禁改状态**：只改 title/content/toUserId/deadline/customerId
+3. **状态流转专用接口**：confirm/complete 各司其职
+4. **确认/完成追溯**：confirmedById/completedById 记录操作人
+5. **权限两级**：POST/PATCH→主管+管理员(@Roles)；confirm/complete→toUserId本人或管理员(代码校验)
+
+### 权限
+| 接口 | 权限 |
+|------|------|
+| POST /tasks | 主管+管理员(@Roles) |
+| PATCH /tasks | 主管+管理员(@Roles) |
+| GET /tasks | 所有登录角色(TODO) |
+| confirm/complete | toUserId本人或管理员(代码ensureActor) |
+
+### 验证结果
+10/10 全部通过：主管创建✅、商务403✅、列表✅、本人确认✅、非本人403✅、完成✅、重复400✅、管理员代确认✅、PATCH改title不改status✅、无token401✅
+
+### 测试踩坑
+**坑：grep 匹配中文 JSON 编码误报**
+- 现象：curl + grep 验证时，`status=待确认` 在 JSON 中编码为 `待确认`，grep 匹配不到中文原文
+- 解决：用 `python3 -c "assert d['status']=='待确认'"` 做精确断言，不依赖 grep 文本匹配
+- 结论：以后 curl 测试用 python3 断言，不要用 grep 匹配中文字段
 - WorkOrder: 创建、重复409+existingWorkOrder、列表、办件中、办结+归档、打卡、401
 - Auth /me ✅
 - Customers 详情 ✅

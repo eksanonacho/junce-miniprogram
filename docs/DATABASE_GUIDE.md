@@ -3,13 +3,13 @@
 > **这个文件是给谁看的**:任何要碰数据库的开发者(或 AI)。
 > **什么时候用**:理解现有表结构、新建表、改字段、排查数据问题前。
 > **解决什么问题**:看懂数据库目前怎么设计、哪些表已完成、哪些后续要加、改库的规矩是什么。
-> 最后更新:2026-06-08(晚)。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。
+> 最后更新:2026-06-08(深夜)。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。
 
 ---
 
 ## 一、当前已实现表
 
-目前数据库共 13 张表:11 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
+目前数据库共 14 张表:12 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
 
 ### 1.1 roles — 角色主数据表
 - **用途**:存系统的 6 种岗位角色,是权限体系的基础。
@@ -176,6 +176,22 @@
   - 创建/PATCH:会计/主管/管理员
   - 分派会计:主管/管理员
   - 会计确认:会计本人或管理员(非本人 403)
+
+### 1.13 tasks — 任务表(主管→员工)
+- **用途**:通用任务流转框架。主管发布任务、员工确认/完成。
+- **主键**:id
+- **关键字段**:
+  - `title`/`content`:任务标题/内容(TODO: 任务1/2/3等客户给)
+  - `fromUserId`:发布人(主管)
+  - `toUserId`:执行人
+  - `customerId`:可空 FK→customers，不传=通用任务
+  - `deadline`:截止时间
+  - `status`:枚举 TaskStatus(待确认→进行中→已完成)
+  - `confirmedAt`/`confirmedById`:确认时间/操作人
+  - `completedAt`/`completedById`:完成时间/操作人
+- **外键**:fromUserId→users, toUserId→users, customerId→customers, confirmedById→users, completedById→users
+- **金额字段**:无
+- **权限**:创建/更新→主管+管理员。confirm/complete→toUserId 本人或管理员
 
 ---
 

@@ -82,6 +82,13 @@ enum ChargeStatus {
   未收
 }
 
+// 任务状态
+enum TaskStatus {
+  待确认   // 主管刚发布
+  进行中   // 员工已确认
+  已完成   // 员工已完成
+}
+
 // ---- 角色表 ----
 model Role {
   id        Int       @id @default(autoincrement())
@@ -134,6 +141,12 @@ model User {
   // 被分派的托管入档
   tenantAssignments    TenantRegister[] @relation("TenantAccountant")
 
+  // 任务相关
+  assignedTasks        Task[] @relation("TaskFrom")
+  receivedTasks        Task[] @relation("TaskTo")
+  taskConfirmations    Task[] @relation("TaskConfirmer")
+  taskCompletions      Task[] @relation("TaskCompleter")
+
   @@map("users")
 }
 
@@ -176,6 +189,9 @@ model Customer {
 
   // 该客户的托管入档
   tenantRegister   TenantRegister?
+
+  // 关联该客户的任务
+  tasks            Task[]
 
   @@map("customers")
 }
@@ -337,4 +353,30 @@ model TenantRegister {
   assignedAccountant    User?     @relation("TenantAccountant", fields: [assignedAccountantId], references: [id])
 
   @@map("tenant_registers")
+}
+
+// ---- 任务表（主管→员工） ----
+model Task {
+  id            Int        @id @default(autoincrement())
+  title         String
+  content       String?                                    // TODO: 任务1/2/3具体内容等客户给
+  fromUserId    Int        @map("from_user_id")            // 发布人（主管）
+  toUserId      Int        @map("to_user_id")              // 执行人
+  customerId    Int?       @map("customer_id")             // 可选关联客户
+  deadline      DateTime
+  status        TaskStatus @default(待确认)
+  confirmedAt   DateTime?  @map("confirmed_at")
+  confirmedById Int?       @map("confirmed_by_id")         // 确认操作人
+  completedAt   DateTime?  @map("completed_at")
+  completedById Int?       @map("completed_by_id")         // 完成操作人
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt      @map("updated_at")
+
+  fromUser      User       @relation("TaskFrom", fields: [fromUserId], references: [id])
+  toUser        User       @relation("TaskTo", fields: [toUserId], references: [id])
+  confirmer     User?      @relation("TaskConfirmer", fields: [confirmedById], references: [id])
+  completer     User?      @relation("TaskCompleter", fields: [completedById], references: [id])
+  customer      Customer?  @relation(fields: [customerId], references: [id])
+
+  @@map("tasks")
 }

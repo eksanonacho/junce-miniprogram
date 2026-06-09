@@ -3,7 +3,7 @@
 > **这个文件是给谁看的**:任何改完代码、要确认没改坏系统的人(或 AI)。
 > **什么时候用**:每次改代码后做回归测试;新模块开发完做验证;排查"是不是哪里坏了"。
 > **解决什么问题**:照着跑一遍,快速确认核心功能(登录/权限/客户)还正常。
-> 最后更新:2026-06-08(晚)。所有 curl 命令均已实测通过。
+> 最后更新:2026-06-08(深夜)。所有 curl 命令均已实测通过。
 
 ---
 
@@ -357,7 +357,83 @@ curl -s --noproxy "*" http://localhost:3000/tenant-registers/1 | python3 -m json
 
 ---
 
-## 八、前端联调测试(前端做完后逐项验)
+## 八、Task 任务框架测试
+
+> ⚠️ POST/PATCH 限主管+管理员。confirm/complete 限 toUserId 本人或管理员（非本人 403）。
+
+### 登录
+```bash
+TOKEN_ZG=$(curl ... username:zhuguan)   # 主管
+TOKEN_KJ=$(curl ... username:kuaiji)     # 会计(被指派人)
+TOKEN_SW=$(curl ... username:shangwu)    # 商务(非主管)
+TOKEN_YW=$(curl ... username:yewu)       # 业务(非被指派人)
+```
+
+### 1. 主管创建任务
+```bash
+TASK_ID=$(curl -s --noproxy "*" -X POST http://localhost:3000/tasks \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_ZG" \
+  -d '{"title":"月度报税","toUserId":3,"deadline":"2026-06-20T00:00:00Z"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+```
+**预期**:status=待确认，toUser=会计王五。
+
+### 2. 商务创建 → 403
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/tasks \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_SW" \
+  -d '{"title":"test","toUserId":3,"deadline":"..."}' | python3 -m json.tool
+```
+**预期**:403。
+
+### 3. 非被指派人确认 → 403
+```bash
+curl -s --noproxy "*" -X POST "http://localhost:3000/tasks/$TASK_ID/confirm" \
+  -H "Authorization: Bearer $TOKEN_YW" | python3 -m json.tool
+```
+**预期**:403，只有被指派人本人或管理员才能确认。
+
+### 4. 被指派人确认 → 成功
+```bash
+curl -s --noproxy "*" -X POST "http://localhost:3000/tasks/$TASK_ID/confirm" \
+  -H "Authorization: Bearer $TOKEN_KJ" | python3 -m json.tool
+```
+**预期**:status=进行中，confirmer=会计王五。
+
+### 5. 被指派人完成 → 成功
+```bash
+curl -s --noproxy "*" -X POST "http://localhost:3000/tasks/$TASK_ID/complete" \
+  -H "Authorization: Bearer $TOKEN_KJ" | python3 -m json.tool
+```
+**预期**:status=已完成，completer=会计王五。
+
+### 6. 重复完成 → 400
+```bash
+curl -s --noproxy "*" -X POST "http://localhost:3000/tasks/$TASK_ID/complete" \
+  -H "Authorization: Bearer $TOKEN_KJ" | python3 -m json.tool
+```
+**预期**:400。
+
+### 7. PATCH 改 title 不改 status
+```bash
+curl -s --noproxy "*" -X PATCH "http://localhost:3000/tasks/$TASK_ID" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_ZG" \
+  -d '{"title":"月度报税(已更新)"}' | python3 -m json.tool
+```
+**预期**:title已更新，status仍为已完成。
+
+### 8. 无 token → 401
+```bash
+curl -s --noproxy "*" http://localhost:3000/tasks | python3 -m json.tool
+```
+**预期**:401。
+
+---
+
+## 九、前端联调测试(前端做完后逐项验)
 
 | 测试项 | 怎么验 | 预期 |
 |---|---|---|
@@ -370,7 +446,7 @@ curl -s --noproxy "*" http://localhost:3000/tenant-registers/1 | python3 -m json
 
 ---
 
-## 九、回归测试顺序(每次改代码后照做)
+## 十、回归测试顺序(每次改代码后照做)
 
 1. **`pnpm build`** — 先确认能编译通过(0 errors)。
 2. **启动后端** — `pnpm start:dev`,看到 successfully started。
@@ -380,13 +456,14 @@ curl -s --noproxy "*" http://localhost:3000/tenant-registers/1 | python3 -m json
 6. **WorkOrder 测试** — 跑第五节,确认创建/状态流转/打卡/归档校验/401 都对。
 7. **Charge 测试** — 跑第六节,确认 403/催收/确认/400 都对。
 8. **TenantRegister 测试** — 跑第七节,确认代理户/403/400/分派/本人确认/401 都对。
-9. **前端页面测试** — 跑第八节(如果改动涉及前端)。
+9. **Task 测试** — 跑第八节,确认主管创建/403/非本人403/确认/完成/400/PATCH/401 都对。
+10. **前端页面测试** — 跑第九节(如果改动涉及前端)。
 
 > 原则:改了后端,至少跑 Auth + Customers;改了某个模块,重点测那个模块 + 它依赖的(如改客户必连带测登录)。
 
 ---
 
-## 十、常见测试问题
+## 十一、常见测试问题
 
 | 问题 | 现象 | 解决 |
 |---|---|---|
