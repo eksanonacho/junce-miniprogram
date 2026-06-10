@@ -541,7 +541,54 @@ curl -s --noproxy "*" -o /dev/null -w "%{http_code}" http://localhost:3000/uploa
 
 ---
 
-## 十一、前端联调测试(前端做完后逐项验)
+## 十一、Fission 业务裂变测试
+
+> ⚠️ PATCH/confirm/archive/mark-invalid 限 `@Roles('主管','管理员')`。商务/业务/会计访问返回 403。
+> ⚠️ price 仅记录报价，不参与佣金/奖励/收费计算。
+
+### 登录
+```bash
+TOKEN_SW=$(curl ... username:shangwu)    # 商务
+TOKEN_ZG=$(curl ... username:zhuguan)    # 主管
+TOKEN_AD=$(curl ... username:admin)      # 管理员
+```
+
+### 1. 创建（不传 sourceCustomerId）
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/fission-leads \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_SW" \
+  -d '{"leadName":"某新建材公司","price":3000}' | python3 -m json.tool
+```
+**预期**:201，sourceCustomerId=null，initiatedBy=商务张三。
+
+### 2. 商务 PATCH → 403
+```bash
+curl -s --noproxy "*" -X PATCH http://localhost:3000/fission-leads/<id> \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_SW" -d '{"leadName":"x"}' | python3 -m json.tool
+```
+**预期**:403。
+
+### 3. 主管 PATCH 成功
+```bash
+curl -s --noproxy "*" -X PATCH http://localhost:3000/fission-leads/<id> \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_ZG" -d '{"leadName":"已更新"}' | python3 -m json.tool
+```
+**预期**:leadName 已更新，status 不变。
+
+### 4. 商务 confirm → 403
+### 5. 主管 confirm → 成功（confirmedById/confirmedAt 已填）
+### 6. archive → 成功（archiveFiles/archivedById/archivedAt 已填）
+### 7. mark-invalid → 成功
+### 8. 已归档后 mark-invalid → 400
+### 9. 列表/详情 → 成功
+### 10. 无 token → 401
+
+---
+
+## 十二、前端联调测试(前端做完后逐项验)
 
 | 测试项 | 怎么验 | 预期 |
 |---|---|---|
@@ -554,7 +601,7 @@ curl -s --noproxy "*" -o /dev/null -w "%{http_code}" http://localhost:3000/uploa
 
 ---
 
-## 十二、回归测试顺序(每次改代码后照做)
+## 十三、回归测试顺序(每次改代码后照做)
 
 1. **`pnpm build`** — 先确认能编译通过(0 errors)。
 2. **启动后端** — `pnpm start:dev`,看到 successfully started。
@@ -567,13 +614,14 @@ curl -s --noproxy "*" -o /dev/null -w "%{http_code}" http://localhost:3000/uploa
 9. **Task 测试** — 跑第八节,确认主管创建/403/非本人403/确认/完成/400/PATCH/401 都对。
 10. **Dashboard 测试** — 跑第九节,确认 overview/customers/services/tasks/charges/403/401/金额number 都对。
 11. **Files 测试** — 跑第十节,确认 PDF上传/PNG/401/400/413/静态访问 都对。
-12. **前端页面测试** — 跑第十一节(如果改动涉及前端)。
+12. **Fission 测试** — 跑第十一节,确认创建/403/PATCH/confirm/archive/mark-invalid/401 都对。
+13. **前端页面测试** — 跑第十二节(如果改动涉及前端)。
 
 > 原则:改了后端,至少跑 Auth + Customers;改了某个模块,重点测那个模块 + 它依赖的(如改客户必连带测登录)。
 
 ---
 
-## 十三、常见测试问题
+## 十四、常见测试问题
 
 | 问题 | 现象 | 解决 |
 |---|---|---|

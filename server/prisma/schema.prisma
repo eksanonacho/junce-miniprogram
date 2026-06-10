@@ -89,6 +89,14 @@ enum TaskStatus {
   已完成   // 员工已完成
 }
 
+// 裂变线索状态
+enum FissionStatus {
+  待确认   // 刚填单
+  已确认   // 相关人员确认
+  已归档   // 上传凭证归档
+  无效     // 标记无效
+}
+
 // ---- 角色表 ----
 model Role {
   id        Int       @id @default(autoincrement())
@@ -147,6 +155,12 @@ model User {
   taskConfirmations    Task[] @relation("TaskConfirmer")
   taskCompletions      Task[] @relation("TaskCompleter")
 
+  // 裂变相关
+  initiatedLeads       FissionLead[] @relation("FissionInitiator")
+  assignedLeads        FissionLead[] @relation("FissionAssignee")
+  confirmedLeads       FissionLead[] @relation("FissionConfirmer")
+  archivedLeads        FissionLead[] @relation("FissionArchiver")
+
   @@map("users")
 }
 
@@ -192,6 +206,9 @@ model Customer {
 
   // 关联该客户的任务
   tasks            Task[]
+
+  // 该客户作为来源的裂变线索
+  fissionLeads      FissionLead[]
 
   @@map("customers")
 }
@@ -333,6 +350,35 @@ model CollectionReminder {
   toUser      User      @relation("ReminderTo", fields: [toUserId], references: [id])
 
   @@map("collection_reminders")
+}
+
+// ---- 业务裂变线索表 ----
+model FissionLead {
+  id                Int            @id @default(autoincrement())
+  sourceCustomerId  Int?           @map("source_customer_id")  // 来源客户，可空
+  initiatedById     Int            @map("initiated_by_id")     // 发起人，JWT 自动取
+  price             Decimal?       @db.Decimal(12, 2)         // 仅记录报价，不参与佣金/奖励/收费
+  leadName          String?        @map("lead_name")
+  contactName       String?        @map("contact_name")
+  phone             String?
+  description       String?
+  assigneeId        Int?           @map("assignee_id")
+  status            FissionStatus  @default(待确认)
+  confirmedById     Int?           @map("confirmed_by_id")
+  confirmedAt       DateTime?      @map("confirmed_at")
+  archivedById      Int?           @map("archived_by_id")
+  archivedAt        DateTime?      @map("archived_at")
+  archiveFiles      Json?          @map("archive_files")       // [{name,url,size,mimeType,uploadedAt}]
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt      @map("updated_at")
+
+  sourceCustomer    Customer?      @relation(fields: [sourceCustomerId], references: [id])
+  initiatedBy       User           @relation("FissionInitiator", fields: [initiatedById], references: [id])
+  assignee          User?          @relation("FissionAssignee", fields: [assigneeId], references: [id])
+  confirmer         User?          @relation("FissionConfirmer", fields: [confirmedById], references: [id])
+  archiver          User?          @relation("FissionArchiver", fields: [archivedById], references: [id])
+
+  @@map("fission_leads")
 }
 
 // ---- 托管入档表（仅代理户） ----

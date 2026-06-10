@@ -14,6 +14,7 @@ import { TenantRegistersModule } from './tenant-registers/tenant-registers.modul
 import { TasksModule } from './tasks/tasks.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { FilesModule } from './files/files.module';
+import { FissionLeadsModule } from './fission-leads/fission-leads.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -36,6 +37,7 @@ import { AppService } from './app.service';
     TasksModule,
     DashboardModule,
     FilesModule,
+    FissionLeadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

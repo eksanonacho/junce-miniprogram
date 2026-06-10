@@ -689,3 +689,26 @@ ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键
 
 ### 验证结果
 7/7 全部通过：PDF上传✅、PNG上传✅、无token→401✅、.exe→400✅、>10MB→413✅、静态URL可访问200✅、archiveFiles兼容✅
+
+---
+
+## 2026-06-10 第17步：Fission 业务裂变模块
+
+### 做了什么
+实现第一期业务裂变简化流程——裂变填单 + 确认 + 归档 + 标记无效。
+
+### 新增
+- fission_leads 表: sourceCustomerId(可空)/initiatedById/price(Decimal12,2)/status/confirmedById/confirmedAt/archivedById/archivedAt/archiveFiles
+- FissionStatus 枚举: 待确认→已确认→已归档/无效
+
+### 关键设计
+1. PATCH 禁改 status，状态流转走 confirm/archive/mark-invalid
+2. @Roles: PATCH/confirm/archive/mark-invalid 限主管+管理员
+3. sourceCustomerId 可空，表示来源客户
+4. price 仅记录报价，不参与佣金/奖励/收费
+5. archiveFiles 复用 Files upload 返回对象
+
+### 验证结果
+15/15: 创建✅、sourceCustomerId=null✅、商务PATCH→403✅、主管PATCH✅、商务confirm→403✅、主管confirm✅、archive✅、mark-invalid✅、已归档不可invalid→400✅、列表/详情✅、401✅
+
+> 文档同步完成：DATABASE_GUIDE 已补齐(1.14 fission_leads+FissionStatus)、TESTING_GUIDE 已补齐第十一节(10条测试)、ROADMAP 已标记模块 9 完成、API_CONTRACT 确认完整。

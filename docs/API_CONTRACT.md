@@ -447,6 +447,7 @@
 | receiptReceiverId | number | 否 | 回执接收人用户 ID |
 
 - **规则**:customerId 自动取。同一 serviceItem 只能一个办件。
+- **handlerId / receiptReceiverId 可选**：不选择时**不传字段**（不要传 `null`，`@IsInt()` 会 400）。传 `0` 会因用户不存在而 404。
 - **重复创建返回 409**:
 ```json
 {
@@ -470,10 +471,30 @@
 - **方法**:GET
 - **URL**:`/work-orders`
 - **Query**:`customerId` / `handlerId` / `status`，可选组合。
+- **分页**：当前不分页，返回全量。后续数据量增大再补分页参数。
+- **返回结构**：与 `GET /work-orders/:id` 完全一致（同型数组）。每个元素含 14 个顶层字段 + 4 个嵌套对象。真实返回示例：
+```json
+{
+  "id": 4, "customerId": 1, "serviceItemId": 4, "handlerId": 2,
+  "status": "已打卡", "receiptReceiverId": 5,
+  "archiveFiles": [{ "url": "/uploads/x.pdf", "name": "xx.pdf", "size": 1024 }],
+  "completedAt": "2026-06-07T10:32:14.965Z",
+  "checkedInAt": "2026-06-07T10:32:14.994Z",
+  "createdAt": "...", "updatedAt": "...",
+  "customer": { "id": 1, "companyName": "测试科技有限公司" },
+  "serviceItem": {
+    "id": 4, "status": "待办",
+    "serviceTemplate": { "id": 12, "serviceType": "卫生证" }
+  },
+  "handler": { "id": 2, "realName": "业务李四" },
+  "receiptReceiver": { "id": 5, "realName": "总务钱七" }
+}
+```
+- **null 规则**：handler/receiptReceiver 未指派时为 `null`；archiveFiles 未打卡时为 `null`（不是 `[]`）；completedAt/checkedInAt 未触发时为 `null`。
 
 ### 7.3 GET /work-orders/:id — 办件详情
 - **方法**:GET
-- **返回**:含 customer / serviceItem(含template) / handler / receiptReceiver 嵌套。
+- **返回**：与 `GET /work-orders` 单条元素结构一致。含 customer(仅id+companyName) / serviceItem(含serviceTemplate,仅id+serviceType) / handler(仅id+realName) / receiptReceiver(仅id+realName) 四个嵌套。
 
 ### 7.4 PATCH /work-orders/:id — 更新办件
 - **方法**:PATCH
@@ -491,9 +512,22 @@
 ### 7.5 POST /work-orders/:id/check-in — 办结打卡
 - **方法**:POST
 - **URL**:`/work-orders/:id/check-in`
-- **Body**:`{ "archiveFiles": [...] }` — **必填，至少1项**，空数组返回 400。
+- **Body**:`{ "archiveFiles": [...] }` — **必填，至少1项对象**，空数组返回 400。
+- **archiveFiles 格式**：**对象数组**，不是字符串数组。每个元素至少含 `name` / `url` / `size`：
+```json
+{
+  "archiveFiles": [
+    { "name": "营业执照.pdf", "url": "/uploads/xxx.pdf", "size": 1024000 }
+  ]
+}
+```
+- **来自 Files upload**：`POST /files/upload` 返回对象含 `{ name, url, size, mimeType, uploadedAt }`，可直接作为数组元素放入 archiveFiles（多出的 mimeType/uploadedAt 兼容，不影响）。
 - **前置**:status 必须 `办结`，否则 400。
 - **效果**:status → `已打卡`，checkedInAt → 当前时间。
+
+### 7.6 status 字段区分
+- `workOrder.status`（WorkOrderStatus 枚举：`待办`/`办件中`/`办结`/`已打卡`）是**办件主状态**，前端办件页面应使用此字段。
+- `serviceItem.status`（ItemStatus 枚举：`待办`/`办件中`/`办结`）是**服务项状态**，独立管理，办件页面不应依赖此字段。
 
 ---
 
@@ -614,21 +648,45 @@
 
 ---
 
-## 十一、Fission 业务裂变接口（待开发）
+## 十一、Fission 业务裂变接口
 
-> ⚠️ **后端接口尚未开发。** 以下为需求文档定义的内容，一期只做裂变填单 + 确认 + 归档记录，不做群协同。
+> ⚠️ 第一期简化版：裂变填单 + 确认 + 归档。**不做群协同、不做佣金、不做绩效。**
 
-### 预计接口
+### 11.1 POST /fission-leads — 创建裂变线索
+- **权限**：所有登录角色（TODO：后续可能限会计/主管/管理员）
+- **Body**：`{ sourceCustomerId?, leadName?, contactName?, phone?, description?, assigneeId?, price? }`
+- **规则**：`sourceCustomerId` 可空（来源客户），`initiatedById` 从 JWT 自动取。
+- **price**：`Decimal(12,2)`。仅记录报价，不参与佣金/奖励/收费。
 
-| 接口 | 用途 | 权限 |
-|------|------|------|
-| `POST /fissions` | 裂变填单（简化模板，含价格+业务指派人） | 会计/主管 |
-| `GET /fissions?customerId=X` | 裂变列表 | 所有登录角色 |
-| `GET /fissions/:id` | 裂变详情 | 所有登录角色 |
-| `POST /fissions/:id/confirm` | 相关人员确认 | 所有登录角色 |
-| `POST /fissions/:id/archive` | 上传办结凭证归档 | 业务 |
+### 11.2 GET /fission-leads — 列表
+- **Query**：`sourceCustomerId` / `status`
+- **权限**：所有登录角色（TODO 收紧）
 
-**业务约束**：仅代理户、不做群协同、不做复杂审批流。
+### 11.3 GET /fission-leads/:id — 详情
+- **权限**：所有登录角色
+
+### 11.4 PATCH /fission-leads/:id ⚠️
+- **权限**：`@Roles('主管','管理员')`
+- **只允许改**：`sourceCustomerId`/`leadName`/`contactName`/`phone`/`description`/`assigneeId`/`price`/`archiveFiles`
+- **禁止改 status**。状态流转走专用接口。
+
+### 11.5 POST /fission-leads/:id/confirm ⚠️
+- **权限**：`@Roles('主管','管理员')`
+- **前置**：status=`待确认`
+- **效果**：status→`已确认`，confirmedById/confirmedAt 写入
+
+### 11.6 POST /fission-leads/:id/archive ⚠️
+- **权限**：`@Roles('主管','管理员')`
+- **Body**：`{ archiveFiles: [...] }` — 对象数组
+- **前置**：status=`已确认`
+- **效果**：status→`已归档`，archivedById/archivedAt/archiveFiles 写入
+
+### 11.7 POST /fission-leads/:id/mark-invalid ⚠️
+- **权限**：`@Roles('主管','管理员')`
+- **前置**：status 须为`待确认`或`已确认`
+- **效果**：status→`无效`
+
+**archiveFiles 兼容**：`POST /files/upload` 返回对象可直接作为数组元素。
 
 ---
 

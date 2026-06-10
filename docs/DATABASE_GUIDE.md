@@ -9,7 +9,7 @@
 
 ## 一、当前已实现表
 
-目前数据库共 14 张表:12 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
+目前数据库共 15 张表:13 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
 
 ### 1.1 roles — 角色主数据表
 - **用途**:存系统的 6 种岗位角色,是权限体系的基础。
@@ -199,6 +199,25 @@ Dashboard 模块不新增数据库表，仅基于已有表（customers/service_i
 ### Files 文件上传模块(无新表)
 
 Files 模块不新增数据库表。文件通过 multer 写入本地磁盘 `server/uploads/`，文件名使用 `timestamp+UUID+ext` 防重名和路径穿越。文件访问通过 `ServeStaticModule` 挂载 `/uploads` 路径。上传返回的元数据（name/url/size/mimeType/uploadedAt）可直接放入 WorkOrder.archiveFiles JSON 字段。
+
+### 1.14 fission_leads — 业务裂变线索表
+- **用途**：记录由现有客户/服务产生的裂变线索。第一期只做填单+确认+归档。
+- **主键**：id
+- **关键字段**：
+  - `sourceCustomerId`：外键 → customers.id，**可空**（来源客户，可能来自外部渠道）
+  - `initiatedById`：外键 → users.id，发起人（JWT 自动取）
+  - `leadName`/`contactName`/`phone`/`description`：线索基本信息
+  - `assigneeId`：外键 → users.id，业务指派人
+  - `price`：**@db.Decimal(12,2)**。仅记录报价，不参与佣金/奖励/绩效/收费记录
+  - `status`：枚举 FissionStatus（待确认→已确认→已归档/无效）
+  - `confirmedById`/`confirmedAt`：确认操作人和时间
+  - `archivedById`/`archivedAt`：归档操作人和时间
+  - `archiveFiles`：JSON，格式兼容 Files upload 返回对象
+- **外键**：sourceCustomerId→customers(可空)，initiatedById/assigneeId/confirmedById/archivedById→users
+- **枚举**：FissionStatus(待确认/已确认/已归档/无效)
+- **金额字段**：price，Decimal(12,2)
+- **权限**：PATCH/confirm/archive/mark-invalid 限主管+管理员(@Roles)
+- **状态流转**：PATCH 禁改 status，必须通过 confirm/archive/mark-invalid 接口
 
 ---
 
