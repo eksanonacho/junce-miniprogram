@@ -588,7 +588,41 @@ curl -s --noproxy "*" -X PATCH http://localhost:3000/fission-leads/<id> \
 
 ---
 
-## 十二、前端联调测试(前端做完后逐项验)
+## 十二、ManualDashboard 手动看板测试
+
+> ⚠️ 创建/修改限 `@Roles('总务','管理员')`，查看限 `@Roles('主管','总务','管理员')`，商务/业务/会计→403。
+> ⚠️ profitAmount 和 totalAmount **前端不传**，后端自动计算。
+> ⚠️ month 必须 YYYY-MM 格式。salary 金额未传默认 0。
+
+### 登录
+```bash
+TOKEN_ZW=$(curl ... username:zongwu)    # 总务
+TOKEN_ZG=$(curl ... username:zhuguan)   # 主管
+TOKEN_SW=$(curl ... username:shangwu)   # 商务
+```
+
+### 1. 总务创建经营记录
+```bash
+curl -s --noproxy "*" -X POST http://localhost:3000/manual-dashboard/business-reports \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_ZW" \
+  -d '{"month":"2026-06","revenueAmount":500000,"costAmount":300000}' | python3 -m json.tool
+```
+**预期**:profitAmount=200000(自动计算)。
+
+### 2. 商务创建 → 403
+### 3. 主管查看 summary（金额 number）
+### 4. 非法 month "2026-6" → 400
+### 5. PATCH 后 profitAmount 自动重算
+### 6. 总务创建工资记录（totalAmount 自动算）
+### 7. salary 只传 baseSalary，其他默认 0 → totalAmount 正确
+### 8. 同一员工同一月重复 → 409
+### 9. 商务查看工资 → 403
+### 10. 无 token → 401
+
+---
+
+## 十三、前端联调测试(前端做完后逐项验)
 
 | 测试项 | 怎么验 | 预期 |
 |---|---|---|
@@ -601,7 +635,7 @@ curl -s --noproxy "*" -X PATCH http://localhost:3000/fission-leads/<id> \
 
 ---
 
-## 十三、回归测试顺序(每次改代码后照做)
+## 十四、回归测试顺序(每次改代码后照做)
 
 1. **`pnpm build`** — 先确认能编译通过(0 errors)。
 2. **启动后端** — `pnpm start:dev`,看到 successfully started。
@@ -615,13 +649,14 @@ curl -s --noproxy "*" -X PATCH http://localhost:3000/fission-leads/<id> \
 10. **Dashboard 测试** — 跑第九节,确认 overview/customers/services/tasks/charges/403/401/金额number 都对。
 11. **Files 测试** — 跑第十节,确认 PDF上传/PNG/401/400/413/静态访问 都对。
 12. **Fission 测试** — 跑第十一节,确认创建/403/PATCH/confirm/archive/mark-invalid/401 都对。
-13. **前端页面测试** — 跑第十二节(如果改动涉及前端)。
+13. **ManualDashboard 测试** — 跑第十二节,确认经营/工资/403/401/自动计算/409 都对。
+14. **前端页面测试** — 跑第十三节(如果改动涉及前端)。
 
 > 原则:改了后端,至少跑 Auth + Customers;改了某个模块,重点测那个模块 + 它依赖的(如改客户必连带测登录)。
 
 ---
 
-## 十四、常见测试问题
+## 十五、常见测试问题
 
 | 问题 | 现象 | 解决 |
 |---|---|---|

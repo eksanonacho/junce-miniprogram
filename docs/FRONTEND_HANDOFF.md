@@ -168,7 +168,26 @@
 - 相关人员确认后 → 协办后反馈、上传办结凭证归档
 - **不做群协同**（客户手动建群）
 
-### 第八阶段：看板（待后端接口）
+### 第八阶段：手动经营/工资看板
+
+> ⚠️ 金额敏感，权限限总务+管理员。前端不传 profitAmount/totalAmount。
+
+| 页面 | 路径建议 | 接口 | 角色 | 状态 |
+|------|---------|------|------|------|
+| 经营录入页 | `/pages/manual-dashboard/business` | `POST/PATCH /manual-dashboard/business-reports` | 总务+管理员 | ⬜ |
+| 经营汇总 | 嵌入页面 | `GET /manual-dashboard/business-reports/summary` | 主管+总务+管理员 | ⬜ |
+| 工资录入页 | `/pages/manual-dashboard/salary` | `POST/PATCH /manual-dashboard/salary-reports` | 总务+管理员 | ⬜ |
+| 工资汇总 | 嵌入页面 | `GET /manual-dashboard/salary-reports/summary` | 主管+总务+管理员 | ⬜ |
+
+**前端注意事项**：
+- 经营只传 `month/revenueAmount/costAmount/note`，**不传 profitAmount**
+- 工资只传 `month/userId/baseSalary/commission/bonus/deduction/socialInsurance/note`，**不传 totalAmount**
+- month 用 YYYY-MM 选择器（如 2026-06）
+- 金额输入空值按 0，最终以后端返回为准
+- summary 金额只展示，不在前端二次计算
+- 403 弹"权限不足"，不要跳登录
+
+### 第九阶段：看板（待后端接口）
 
 > ⚠️ 后端接口尚未开发。
 

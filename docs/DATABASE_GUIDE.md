@@ -9,7 +9,7 @@
 
 ## 一、当前已实现表
 
-目前数据库共 15 张表:13 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
+目前数据库共 17 张表:15 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
 
 ### 1.1 roles — 角色主数据表
 - **用途**:存系统的 6 种岗位角色,是权限体系的基础。
@@ -192,6 +192,28 @@
 - **外键**:fromUserId→users, toUserId→users, customerId→customers, confirmedById→users, completedById→users
 - **金额字段**:无
 - **权限**:创建/更新→主管+管理员。confirm/complete→toUserId 本人或管理员
+
+### 1.15 manual_business_reports — 经营手动录入表
+- **用途**：手动录入月度经营数据，后端自动计算利润。
+- **主键**：id
+- **关键字段**：
+  - `month`:YYYY-MM 格式
+  - `revenueAmount`/`costAmount`:**@db.Decimal(12,2)**，收入/成本
+  - `profitAmount`:**@db.Decimal(12,2)**，利润，**后端自动计算=revenue-cost，前端不传**
+  - `createdById`:录入人
+- **外键**：createdById→users
+- **金额字段**：revenueAmount/costAmount/profitAmount，Decimal(12,2)
+
+### 1.16 manual_salary_reports — 工资手动录入表
+- **用途**：手动录入员工月度工资，后端自动计算合计。
+- **主键**：id
+- **关键字段**：
+  - `month`/`userId`:月份+员工，UNIQUE 约束
+  - `baseSalary`/`commission`/`bonus`/`deduction`/`socialInsurance`:**@db.Decimal(12,2)**，未传默认0
+  - `totalAmount`:**@db.Decimal(12,2)**，合计，**后端自动计算=base+comm+bonus-deduction-si，前端不传**
+- **外键**：userId→users，createdById→users
+- **唯一约束**：(month, userId) UNIQUE
+- **金额字段**：全部6个字段，Decimal(12,2)
 
 ### Dashboard 看板模块(无新表)
 Dashboard 模块不新增数据库表，仅基于已有表（customers/service_items/work_orders/tasks/charges/collection_reminders）做只读统计，查询方式：Prisma count()/groupBy()/aggregate({ _sum })。

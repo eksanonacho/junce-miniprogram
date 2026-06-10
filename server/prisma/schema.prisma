@@ -161,6 +161,11 @@ model User {
   confirmedLeads       FissionLead[] @relation("FissionConfirmer")
   archivedLeads        FissionLead[] @relation("FissionArchiver")
 
+  // 手动看板
+  businessReports      ManualBusinessReport[]
+  createdSalaryReports ManualSalaryReport[] @relation("SalaryCreator")
+  salaryReports        ManualSalaryReport[] @relation("SalaryUser")
+
   @@map("users")
 }
 
@@ -425,4 +430,44 @@ model Task {
   customer      Customer?  @relation(fields: [customerId], references: [id])
 
   @@map("tasks")
+}
+
+// ---- 经营手动录入表 ----
+model ManualBusinessReport {
+  id            Int       @id @default(autoincrement())
+  month         String                              // YYYY-MM
+  revenueAmount Decimal   @db.Decimal(12, 2) @map("revenue_amount")
+  costAmount    Decimal   @db.Decimal(12, 2) @map("cost_amount")
+  profitAmount  Decimal   @db.Decimal(12, 2) @map("profit_amount")  // 后端自动计算，前端不传
+  note          String?
+  createdById   Int       @map("created_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt      @map("updated_at")
+
+  createdBy     User      @relation(fields: [createdById], references: [id])
+
+  @@map("manual_business_reports")
+}
+
+// ---- 工资手动录入表 ----
+model ManualSalaryReport {
+  id              Int       @id @default(autoincrement())
+  month           String                              // YYYY-MM
+  userId          Int       @map("user_id")
+  baseSalary      Decimal   @default(0) @db.Decimal(12, 2) @map("base_salary")
+  commission      Decimal   @default(0) @db.Decimal(12, 2)
+  bonus           Decimal   @default(0) @db.Decimal(12, 2)
+  deduction       Decimal   @default(0) @db.Decimal(12, 2)
+  socialInsurance Decimal   @default(0) @db.Decimal(12, 2) @map("social_insurance")
+  totalAmount     Decimal   @db.Decimal(12, 2) @map("total_amount")  // 后端自动计算，前端不传
+  note            String?
+  createdById     Int       @map("created_by_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt      @map("updated_at")
+
+  createdBy       User      @relation("SalaryCreator", fields: [createdById], references: [id])
+  user            User      @relation("SalaryUser", fields: [userId], references: [id])
+
+  @@unique([month, userId], name: "unique_month_user")
+  @@map("manual_salary_reports")
 }

@@ -739,7 +739,49 @@
 
 ---
 
-## 十四、枚举值说明
+## 十四、ManualDashboard 手动经营 / 工资看板接口
+
+> ⚠️ 所有金额 Decimal(12,2)。创建/修改限总务+管理员，查看限主管+总务+管理员。商务/业务/会计→403。
+> ⚠️ profitAmount/totalAmount 后端自动计算，**前端不传**。summary 金额返回 number，仅用于展示。
+
+### 14.1 POST /manual-dashboard/business-reports ⚠️
+- **权限**：`@Roles('总务','管理员')`
+- **前端传**：`{ month, revenueAmount, costAmount, note? }` — **不要传 profitAmount**
+- **month 格式**：`YYYY-MM`（如 `2026-06`），正则校验 `/^\d{4}-(0[1-9]|1[0-2])$/`
+- **后端计算**：`profitAmount = revenueAmount - costAmount`
+
+### 14.2 GET /manual-dashboard/business-reports?month=2026-06
+- **权限**：`@Roles('主管','总务','管理员')`
+
+### 14.3 GET /manual-dashboard/business-reports/summary?month=2026-06
+- **权限**：`@Roles('主管','总务','管理员')`
+- **返回**：`{ month, totalRevenue, totalCost, totalProfit, recordCount }` — 金额为 number，仅展示
+
+### 14.4 PATCH /manual-dashboard/business-reports/:id ⚠️
+- **权限**：`@Roles('总务','管理员')`
+- **前端传**：`{ revenueAmount?, costAmount?, note? }` — 修改后自动重算 profitAmount
+
+### 14.5 POST /manual-dashboard/salary-reports ⚠️
+- **权限**：`@Roles('总务','管理员')`
+- **前端传**：`{ month, userId, baseSalary?, commission?, bonus?, deduction?, socialInsurance?, note? }`
+- **不要传 totalAmount**。不传的金额默认 0。
+- **后端计算**：`totalAmount = baseSalary + commission + bonus - deduction - socialInsurance`
+- **唯一约束**：同一员工同一月份只能一条（重复 409）
+
+### 14.6 GET /manual-dashboard/salary-reports?month=2026-06
+- **权限**：`@Roles('主管','总务','管理员')`
+
+### 14.7 GET /manual-dashboard/salary-reports/summary?month=2026-06
+- **权限**：`@Roles('主管','总务','管理员')`
+- **返回**：`{ month, totalBaseSalary, totalCommission, totalBonus, totalDeduction, totalSocialInsurance, totalAmount, recordCount }`
+
+### 14.8 PATCH /manual-dashboard/salary-reports/:id ⚠️
+- **权限**：`@Roles('总务','管理员')`
+- **修改后自动重算 totalAmount**
+
+---
+
+## 十五、枚举值说明
 
 ### 12.2 GET /dashboard/customers — 客户看板
 - **返回**：`total`、`byCategory`(新用户/代理户)、`byTier`(VIP/优质/中低/零申报)、`byLifecycleStage`
@@ -772,7 +814,7 @@
 
 ---
 
-## 十五、curl 测试示例(已验证)
+## 十六、curl 测试示例(已验证)
 
 > 本机若开代理/VPN,localhost 请求会返回 502,所有命令已加 `--noproxy "*"`。
 
