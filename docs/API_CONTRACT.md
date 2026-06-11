@@ -3,7 +3,7 @@
 > **这个文件是给谁看的**:前端开发者(及任何需要调用后端的人/AI)。
 > **什么时候用**:开发前端、联调、排查接口问题时。
 > **解决什么问题**:只看这一个文件,就知道怎么调用后端所有接口,不用看后端代码。
-> 最后更新:2026-06-09。第 2–10 节接口已 curl 验证通过，第 11–12 节（Fission/看板）待后端开发。
+> 最后更新:2026-06-10。第 2–14 节接口已 curl 验证通过（55 个），第 15 节枚举值说明。
 
 ---
 
@@ -550,13 +550,17 @@
 | invoiceNo | string | 否 | 发票号 |
 
 - **规则**:同一客户只能一条 charge（重复返回 409 + existingCharge）。
+- **chargeStatus 初始值**：`未收`（数据库默认值），前端创建时不需要传。
+- **Charge 与 WorkOrder 无自动联动**：创建/确认 charge 不校验 WorkOrder 状态，前端不需要做办件状态校验。
 
 ### 8.2 GET /charges — 查询收费
 - **方法**:GET
 - **Query**:`customerId` / `chargeStatus`（`已收`/`未收`），可选组合。
+- **返回**:数组（不分页）。每条含 13 个顶层字段 + customer(id+companyName) + confirmer(id+realName)。amount 为 number。
 
 ### 8.3 GET /charges/:id — 收费详情
 - **方法**:GET
+- **返回**:与列表同构。**不包含 reminders**，催收记录需单独调 8.7。
 
 ### 8.4 PATCH /charges/:id — 修改收费信息 ⚠️
 - **权限**:**总务 + 管理员**（@Roles）
@@ -567,6 +571,7 @@
 - **权限**:**总务 + 管理员**（@Roles）
 - **效果**:chargeStatus → `已收`，confirmedBy → 当前用户，confirmedAt → 当前时间
 - **前置**:必须是 `未收`，否则 400
+- **返回**:完整 charge 对象（含 confirmer 嵌套）
 
 ### 8.6 POST /charges/:id/remind — 发起催收 ⚠️
 - **权限**:**总务 + 管理员**（@Roles）
@@ -578,9 +583,11 @@
 | message | string | 否 | 催收备注 |
 
 - **前置**:必须是 `未收`，已收后催收返回 400
+- **返回**:新催收记录对象（含 fromUser/toUser 嵌套，各含 id+realName）
 
 ### 8.7 GET /charges/:id/reminders — 查催收记录
 - **方法**:GET
+- **返回**:数组。每条含 `id, chargeId, fromUserId, toUserId, message, createdAt, fromUser(id+realName), toUser(id+realName)`
 
 ---
 
@@ -696,17 +703,20 @@
 > **金额**：`collectedAmount`/`unpaidAmount` 返回 number，仅用于前端展示，不用于二次财务计算。真实存储仍为 Decimal(12,2)。
 
 ### 12.1 GET /dashboard/overview — 老板总览
-- **返回**：
-```json
-{
-  "customers": { "total": 9, "activeCount": 9 },
-  "serviceItems": { "total": 5, "todo": 2, "inProgress": 2, "completed": 1 },
-  "workOrders": { "total": 4, "inProgress": 1 },
-  "tasks": { "total": 6, "pendingConfirm": 1, "inProgress": 2, "completed": 3 },
-  "charges": { "unpaidCount": 1, "collectedAmount": 80000, "unpaidAmount": 50000 }
-}
-```
+- **返回**：customers(含activeCount)/serviceItems/workOrders/tasks/charges 五组统计。
 - **activeCount**：`lifecycleStage !== "出库"` 的客户数。
+
+### 12.2 GET /dashboard/customers — 客户看板
+- **返回**：`total`、`byCategory`(新用户/代理户)、`byTier`(VIP/优质/中低/零申报)、`byLifecycleStage`
+
+### 12.3 GET /dashboard/services — 服务看板
+- **返回**：`serviceItems.total`、`serviceItems.byStatus`、`workOrders.total`、`workOrders.byStatus`
+
+### 12.4 GET /dashboard/tasks — 任务看板
+- **返回**：`total`、`byStatus`、`overdue`（status≠已完成 且 deadline<now）
+
+### 12.5 GET /dashboard/charges — 收费看板
+- **返回**：`total`、`collectedCount`、`unpaidCount`、`collectedAmount`、`unpaidAmount`、`reminderCount`
 
 ---
 
@@ -783,18 +793,6 @@
 
 ## 十五、枚举值说明
 
-### 12.2 GET /dashboard/customers — 客户看板
-- **返回**：`total`、`byCategory`(新用户/代理户)、`byTier`(VIP/优质/中低/零申报)、`byLifecycleStage`
-
-### 12.3 GET /dashboard/services — 服务看板
-- **返回**：`serviceItems.total`、`serviceItems.byStatus`、`workOrders.total`、`workOrders.byStatus`
-
-### 12.4 GET /dashboard/tasks — 任务看板
-- **返回**：`total`、`byStatus`、`overdue`（status≠已完成 且 deadline<now）
-
-### 12.5 GET /dashboard/charges — 收费看板
-- **返回**：`total`、`collectedCount`、`unpaidCount`、`collectedAmount`、`unpaidAmount`、`reminderCount`
-
 > ⚠️ **前端必须使用后端实际接受的枚举值,一字不差,不允许自己编。** 传错值会返回 400。
 
 | 枚举 | 字段 | 可选值 |
@@ -809,6 +807,7 @@
 | ChargeMode | chargeMode | `一次性`、`定金加尾款` |
 | ChargeStatus | chargeStatus | `已收`、`未收` |
 | TaskStatus | status(任务) | `待确认`、`进行中`、`已完成` |
+| FissionStatus | status(裂变) | `待确认`、`已确认`、`已归档`、`无效` |
 
 > 注:roleCode 的实际显示值以后端 seed 数据为准(角色名如"管理员/老板")。前端如需展示角色,用登录返回的 roleCode / roleName。
 

@@ -735,3 +735,5 @@ ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键
 11/12(PATCH重算grep误报，实际profit=300000正确): 创建✅、403✅、主管查看✅、month400✅、工资创建✅、缺省0✅、409✅、salary403✅、401✅
 
 > 文档同步完成：TESTING_GUIDE 已补齐(第十二节)、ROADMAP 已更新(模块0-12完成)、API_CONTRACT 第十四节完整、FRONTEND_HANDOFF 第八阶段已补充、DATABASE_GUIDE 1.15/1.16 已补充。
+
+> Phase 4 Charge 前端接口确认：已查证全部 P0/P1 问题，补充 API_CONTRACT 返回示例(amount=number、confirmer嵌套、chargeStatus初始值=未收、Charge与WorkOrder无联动)、FRONTEND_HANDOFF 新增 customer-detail 收费摘要卡片。
