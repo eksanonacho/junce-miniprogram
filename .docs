@@ -737,3 +737,20 @@ ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键
 > 文档同步完成：TESTING_GUIDE 已补齐(第十二节)、ROADMAP 已更新(模块0-12完成)、API_CONTRACT 第十四节完整、FRONTEND_HANDOFF 第八阶段已补充、DATABASE_GUIDE 1.15/1.16 已补充。
 
 > Phase 4 Charge 前端接口确认：已查证全部 P0/P1 问题，补充 API_CONTRACT 返回示例(amount=number、confirmer嵌套、chargeStatus初始值=未收、Charge与WorkOrder无联动)、FRONTEND_HANDOFF 新增 customer-detail 收费摘要卡片。
+
+---
+
+## 2026-06-11 第19步：全量回归测试
+
+### 做了什么
+对当前后端 12 个模块（55 个接口）做全量回归测试，确认没有被后续模块破坏。
+
+### 测试结果
+**63/63 全部通过 ✅**
+- Auth: 6/6 ✅  |  Customers: 5/5 ✅  |  Users: 3/3 ✅
+- ServiceTemplates: 3/3 ✅  |  ServiceItems/Staff: 3/3 ✅  |  WorkOrders/Files: 6/6 ✅
+- Charges: 7/7 ✅  |  TenantRegisters: 5/5 ✅  |  Tasks: 6/6 ✅
+- Dashboard: 6/6 ✅  |  Fission: 9/9 ✅  |  ManualDashboard: 4/4 ✅
+
+### 测试报告位置
+`docs/REGRESSION_TEST_REPORT_2026-06-11.md`
