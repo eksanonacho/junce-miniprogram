@@ -5,13 +5,43 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
+// ============================================================
+// 安全启动保护（仅生产环境触发）
+// 不属于业务逻辑 —— 这是基础设施层面的安全兜底。
+// ============================================================
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET) {
+    console.error('❌ 生产环境必须设置 JWT_SECRET 环境变量');
+    process.exit(1);
+  }
+  if (
+    process.env.JWT_SECRET === 'junce-dev-secret-key-change-in-production'
+  ) {
+    console.error(
+      '❌ 生产环境禁止使用开发默认 JWT_SECRET，请用 openssl rand -hex 64 生成强随机值',
+    );
+    process.exit(1);
+  }
+  if (!process.env.CORS_ORIGIN) {
+    console.error(
+      '❌ 生产环境必须设置 CORS_ORIGIN 环境变量（前端来源域名，如 https://app.example.com）',
+    );
+    process.exit(1);
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 开启 CORS（联调阶段允许所有来源，上线后收紧）
+  // CORS 策略：开发全开，生产按 CORS_ORIGIN 白名单（支持逗号分隔多域名）
+  const corsOrigin =
+    process.env.NODE_ENV === 'production' && process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+      : true;
+
   app.enableCors({
-    origin: true,            // 允许所有来源（开发阶段）
-    credentials: true,       // 允许携带 Cookie
+    origin: corsOrigin,
+    credentials: true,
   });
 
   // 开启全局 DTO 校验

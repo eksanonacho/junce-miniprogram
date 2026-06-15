@@ -3,3 +3,14 @@ node_modules
 .env
 
 /generated/prisma
+
+# Build output
+dist
+
+# Uploaded files (keep directory)
+uploads/*
+!uploads/.gitkeep
+
+# Database backups
+*.dump
+*.sql

@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+uploads
+generated
+*.dump
+*.sql
+.git
+.gitignore
