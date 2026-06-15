@@ -29,8 +29,7 @@ services:
       dockerfile: Dockerfile
     container_name: junce-server
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    # ports 不暴露到宿主机，仅通过 nginx 反向代理访问
     environment:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
