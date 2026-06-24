@@ -173,3 +173,45 @@
 ---
 
 > 最后更新：2026-06-09
+
+---
+
+## 2026-06-13: Docker 环境冒烟测试（node:22-alpine）
+
+### 测试环境
+- 镜像：node:22-alpine，postgres:16-alpine，nginx:alpine
+- 访问方式：nginx:80 反向代理 → server:3000
+- docker-compose 安全版（仅 nginx 暴露端口）
+
+### 冒烟测试 21/21 全部通过
+
+| # | 接口 | 测试内容 | 预期 | 结果 |
+|---|------|---------|------|------|
+| 1 | GET /health | 健康检查 | 200 | ✅ |
+| 2 | POST /auth/login | admin 登录 | 201 | ✅ |
+| 3 | GET /auth/me | 查当前用户 | 200 | ✅ |
+| 4 | POST /customers | 新建客户 | 201 | ✅ |
+| 5 | GET /customers?keyword | 搜索 | 200 | ✅ |
+| 6 | GET /customers/:id | 详情 | 200 | ✅ |
+| 7 | GET /customers | 列表 | 200 | ✅ |
+| 8 | GET /service-templates | 模板 | 200 | ✅ |
+| 9 | GET /users?roleCode=会计 | 用户筛选 | 200 | ✅ |
+| 10 | POST /charges | 创建收费 | 201 | ✅ |
+| 11 | GET /charges?customerId | 查询 | 200 | ✅ |
+| 12 | POST /charges/:id/confirm | 总务确认 | 201 | ✅ |
+| 13 | GET /dashboard/overview | admin 看板 | 200 | ✅ |
+| 14 | POST /tasks | 主管创建任务 | 201 | ✅ |
+| 15 | GET /tasks | 任务列表 | 200 | ✅ |
+| 16 | GET /auth/me (无token) | 未认证 | 401 | ✅ |
+| 17 | POST /auth/login (错密码) | 错误凭证 | 401 | ✅ |
+| 18 | PATCH /charges (商务) | 越权修改 | 403 | ✅ |
+| 19 | POST confirm (商务) | 越权确认 | 403 | ✅ |
+| 20 | GET /dashboard/overview (商务) | 越权查看 | 403 | ✅ |
+| 21 | POST /tasks (商务) | 越权创建 | 403 | ✅ |
+
+### 基础设施验证
+- seed ✅（6 角色 + 6 测试账号 + 15 服务模板）
+- migrate ✅（10 migrations, No pending）
+- GET /health ✅
+- nginx 反向代理 ✅
+- 3000/5432 端口对外不可访问 ✅
