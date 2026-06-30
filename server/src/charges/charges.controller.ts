@@ -18,6 +18,7 @@ import { CreateReminderDto } from './dto/create-reminder.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuthUser } from '../permissions/permissions.service';
 
 @Controller('charges')
 @UseGuards(JwtAuthGuard)
@@ -27,20 +28,20 @@ export class ChargesController {
   // TODO: 客户补充完整权限表后，POST /charges 可能限为商务/总务/管理员
   // POST /charges
   @Post()
-  async create(@Body() dto: CreateChargeDto) {
-    return this.chargesService.create(dto);
+  async create(@Body() dto: CreateChargeDto, @Request() req: any) {
+    return this.chargesService.create(dto, req.user as AuthUser);
   }
 
   // GET /charges?customerId=1&chargeStatus=未收
   @Get()
-  async findAll(@Query() query: QueryChargeDto) {
-    return this.chargesService.findAll(query);
+  async findAll(@Query() query: QueryChargeDto, @Request() req: any) {
+    return this.chargesService.findAll(query, req.user as AuthUser);
   }
 
   // GET /charges/:id
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.chargesService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.chargesService.findOne(id, req.user as AuthUser);
   }
 
   // PATCH /charges/:id  —— 总务/管理员，不允许改 chargeStatus

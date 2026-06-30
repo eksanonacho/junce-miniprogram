@@ -17,6 +17,7 @@ import { QueryTaskDto } from './dto/query-task.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuthUser } from '../permissions/permissions.service';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -34,14 +35,14 @@ export class TasksController {
   // GET /tasks?status=进行中&fromUserId=X&toUserId=X
   // TODO: 后续权限表补充后细化查询权限
   @Get()
-  async findAll(@Query() query: QueryTaskDto) {
-    return this.tasksService.findAll(query);
+  async findAll(@Query() query: QueryTaskDto, @Request() req: any) {
+    return this.tasksService.findAll(query, req.user as AuthUser);
   }
 
   // GET /tasks/:id
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.tasksService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.tasksService.findOne(id, req.user as AuthUser);
   }
 
   // PATCH /tasks/:id  —— 主管/管理员，不允许改状态

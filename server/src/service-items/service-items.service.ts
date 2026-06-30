@@ -5,13 +5,17 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ItemStatus } from '../../generated/prisma/client';
+import { AuthUser, PermissionService } from '../permissions/permissions.service';
 
 @Injectable()
 export class ServiceItemsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   // 为某客户批量添加服务项
-  async create(customerId: number, templateIds: number[]) {
+  async create(customerId: number, templateIds: number[], user: AuthUser) {
     // 验证客户存在
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
@@ -19,6 +23,10 @@ export class ServiceItemsService {
     if (!customer) {
       throw new NotFoundException(`客户 id=${customerId} 不存在`);
     }
+    this.permissions.ensure(
+      this.permissions.canCreateServiceItem(user, customer),
+      '无权限为该客户添加服务项',
+    );
 
     const results: any[] = [];
     const errors: string[] = [];
@@ -64,7 +72,19 @@ export class ServiceItemsService {
   }
 
   // 查某客户的所有服务项
-  async findByCustomer(customerId: number) {
+  async findByCustomer(customerId: number, user: AuthUser) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { staffAssignment: true, tenantRegister: true },
+    });
+    if (!customer) {
+      throw new NotFoundException(`客户 id=${customerId} 不存在`);
+    }
+    this.permissions.ensure(
+      this.permissions.canReadCustomer(user, customer),
+      '无权限查看该客户服务项',
+    );
+
     return this.prisma.serviceItem.findMany({
       where: { customerId },
       include: {
@@ -83,11 +103,18 @@ export class ServiceItemsService {
   }
 
   // 修改单个服务项状态（本期只允许改 status）
-  async updateStatus(id: number, status: ItemStatus) {
-    const item = await this.prisma.serviceItem.findUnique({ where: { id } });
+  async updateStatus(id: number, status: ItemStatus, user: AuthUser) {
+    const item = await this.prisma.serviceItem.findUnique({
+      where: { id },
+      include: { customer: { include: { staffAssignment: true } }, workOrder: true },
+    });
     if (!item) {
       throw new NotFoundException(`服务项 id=${id} 不存在`);
     }
+    this.permissions.ensure(
+      this.permissions.canUpdateServiceStatus(user, item),
+      '无权限修改该服务项状态',
+    );
 
     return this.prisma.serviceItem.update({
       where: { id },

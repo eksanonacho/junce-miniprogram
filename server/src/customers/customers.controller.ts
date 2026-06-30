@@ -15,6 +15,7 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { QueryCustomerDto } from './dto/query-customer.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthUser } from '../permissions/permissions.service';
 // TODO: 客户权限表补充后启用细粒度角色控制
 // import { RolesGuard } from '../auth/guards/roles.guard';
 // import { Roles } from '../auth/decorators/roles.decorator';
@@ -27,19 +28,19 @@ export class CustomersController {
   // POST /customers  —— ownerId 自动取当前登录用户，不允许前端手传
   @Post()
   async create(@Body() dto: CreateCustomerDto, @Request() req: any) {
-    return this.customersService.create(dto, req.user.sub);
+    return this.customersService.create(dto, req.user as AuthUser);
   }
 
   // GET /customers?tier=VIP&lifecycleStage=填单&keyword=某某公司
   @Get()
-  async findAll(@Query() query: QueryCustomerDto) {
-    return this.customersService.findAll(query);
+  async findAll(@Query() query: QueryCustomerDto, @Request() req: any) {
+    return this.customersService.findAll(query, req.user as AuthUser);
   }
 
   // GET /customers/:id
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.customersService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.customersService.findOne(id, req.user as AuthUser);
   }
 
   // PATCH /customers/:id
@@ -47,7 +48,8 @@ export class CustomersController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCustomerDto,
+    @Request() req: any,
   ) {
-    return this.customersService.update(id, dto);
+    return this.customersService.update(id, dto, req.user as AuthUser);
   }
 }

@@ -17,6 +17,7 @@ import { AssignAccountantDto } from './dto/assign-accountant.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuthUser } from '../permissions/permissions.service';
 
 @Controller('tenant-registers')
 @UseGuards(JwtAuthGuard)
@@ -35,16 +36,17 @@ export class TenantRegistersController {
 
   // GET /tenant-registers?customerId=X
   @Get()
-  async findAll(@Query('customerId') customerId?: string) {
+  async findAll(@Query('customerId') customerId: string | undefined, @Request() req: any) {
     return this.tenantRegistersService.findByCustomer(
       customerId ? parseInt(customerId) : undefined,
+      req.user as AuthUser,
     );
   }
 
   // GET /tenant-registers/:id
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.tenantRegistersService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.tenantRegistersService.findOne(id, req.user as AuthUser);
   }
 
   // PATCH /tenant-registers/:id  —— 会计/主管/管理员，只改 enterpriseDetail/servicePlan
@@ -54,15 +56,16 @@ export class TenantRegistersController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTenantRegisterDto,
+    @Request() req: any,
   ) {
-    return this.tenantRegistersService.update(id, dto);
+    return this.tenantRegistersService.update(id, dto, req.user as AuthUser);
   }
 
   // POST /tenant-registers/:id/confirm-plan  —— 所有登录角色
   // TODO: 后续权限表补齐后，应限制为客户主理人 ownerId 或管理员确认
   @Post(':id/confirm-plan')
-  async confirmPlan(@Param('id', ParseIntPipe) id: number) {
-    return this.tenantRegistersService.confirmPlan(id);
+  async confirmPlan(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.tenantRegistersService.confirmPlan(id, req.user as AuthUser);
   }
 
   // POST /tenant-registers/:id/assign-accountant  —— 主管/管理员

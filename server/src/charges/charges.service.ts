@@ -8,17 +8,25 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { UpdateChargeDto } from './dto/update-charge.dto';
 import { ChargeStatus } from '../../generated/prisma/client';
+import { AuthUser, PermissionService } from '../permissions/permissions.service';
 
 @Injectable()
 export class ChargesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   // 创建收费记录（所有登录角色，TODO: 后续可能限商务/总务/管理员）
-  async create(dto: CreateChargeDto) {
+  async create(dto: CreateChargeDto, user: AuthUser) {
     const customer = await this.prisma.customer.findUnique({
       where: { id: dto.customerId },
     });
     if (!customer) throw new NotFoundException(`客户 id=${dto.customerId} 不存在`);
+    this.permissions.ensure(
+      this.permissions.canCreateCharge(user, customer),
+      '无权限为该客户创建收费记录',
+    );
 
     const existing = await this.prisma.charge.findUnique({
       where: { customerId: dto.customerId },
@@ -45,8 +53,8 @@ export class ChargesService {
   }
 
   // 查询（支持 customerId + chargeStatus 筛选）
-  async findAll(query: { customerId?: number; chargeStatus?: ChargeStatus }) {
-    const where: any = {};
+  async findAll(query: { customerId?: number; chargeStatus?: ChargeStatus }, user: AuthUser) {
+    const where: any = this.permissions.chargeVisibleWhere(user);
     if (query.customerId) where.customerId = query.customerId;
     if (query.chargeStatus) where.chargeStatus = query.chargeStatus;
 
@@ -59,12 +67,18 @@ export class ChargesService {
   }
 
   // 详情
-  async findOne(id: number) {
+  async findOne(id: number, user?: AuthUser) {
     const charge = await this.prisma.charge.findUnique({
       where: { id },
-      include: this.includes(),
+      include: this.includesWithPermission(),
     });
     if (!charge) throw new NotFoundException(`收费记录 id=${id} 不存在`);
+    if (user) {
+      this.permissions.ensure(
+        this.permissions.canReadCharge(user, charge),
+        '无权限查看该收费记录',
+      );
+    }
     return { ...charge, amount: Number(charge.amount.toString()) };
   }
 
@@ -155,6 +169,13 @@ export class ChargesService {
   private includes() {
     return {
       customer: { select: { id: true, companyName: true } },
+      confirmer: { select: { id: true, realName: true } },
+    };
+  }
+
+  private includesWithPermission() {
+    return {
+      customer: { select: { id: true, companyName: true, ownerId: true } },
       confirmer: { select: { id: true, realName: true } },
     };
   }

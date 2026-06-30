@@ -6,10 +6,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TaskStatus } from '../../generated/prisma/client';
+import { AuthUser, PermissionService } from '../permissions/permissions.service';
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   // 创建任务（主管/管理员）
   async create(
@@ -37,8 +41,8 @@ export class TasksService {
   }
 
   // 列表
-  async findAll(query: { status?: TaskStatus; fromUserId?: number; toUserId?: number }) {
-    const where: any = {};
+  async findAll(query: { status?: TaskStatus; fromUserId?: number; toUserId?: number }, user: AuthUser) {
+    const where: any = this.permissions.taskVisibleWhere(user);
     if (query.status) where.status = query.status;
     if (query.fromUserId) where.fromUserId = query.fromUserId;
     if (query.toUserId) where.toUserId = query.toUserId;
@@ -51,9 +55,15 @@ export class TasksService {
   }
 
   // 详情
-  async findOne(id: number) {
+  async findOne(id: number, user?: AuthUser) {
     const task = await this.prisma.task.findUnique({ where: { id }, include: this.includes() });
     if (!task) throw new NotFoundException(`任务 id=${id} 不存在`);
+    if (user) {
+      this.permissions.ensure(
+        this.permissions.canReadTask(user, task),
+        '无权限查看该任务',
+      );
+    }
     return task;
   }
 

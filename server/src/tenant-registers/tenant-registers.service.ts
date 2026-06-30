@@ -6,10 +6,14 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthUser, PermissionService } from '../permissions/permissions.service';
 
 @Injectable()
 export class TenantRegistersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   // 创建（会计/主管/管理员）
   async create(dto: { customerId: number; enterpriseDetail?: any; servicePlan?: any }) {
@@ -48,18 +52,24 @@ export class TenantRegistersService {
   }
 
   // 详情
-  async findOne(id: number) {
+  async findOne(id: number, user?: AuthUser) {
     const tr = await this.prisma.tenantRegister.findUnique({
       where: { id },
       include: this.includes(),
     });
     if (!tr) throw new NotFoundException(`托管入档 id=${id} 不存在`);
+    if (user) {
+      this.permissions.ensure(
+        this.permissions.canReadTenant(user, tr),
+        '无权限查看该托管入档',
+      );
+    }
     return tr;
   }
 
   // 查询
-  async findByCustomer(customerId?: number) {
-    const where: any = {};
+  async findByCustomer(customerId: number | undefined, user: AuthUser) {
+    const where: any = this.permissions.tenantVisibleWhere(user);
     if (customerId) where.customerId = customerId;
     return this.prisma.tenantRegister.findMany({
       where,
@@ -69,8 +79,12 @@ export class TenantRegistersService {
   }
 
   // 更新概况/方案（会计/主管/管理员）
-  async update(id: number, dto: { enterpriseDetail?: any; servicePlan?: any }) {
-    await this.findOne(id);
+  async update(id: number, dto: { enterpriseDetail?: any; servicePlan?: any }, user: AuthUser) {
+    const tr = await this.findOne(id, user);
+    this.permissions.ensure(
+      this.permissions.canUpdateTenant(user, tr),
+      '无权限修改该托管入档',
+    );
     return this.prisma.tenantRegister.update({
       where: { id },
       data: dto,
@@ -79,8 +93,12 @@ export class TenantRegistersService {
   }
 
   // 主理人确认服务方案（所有登录角色，TODO: 限客户 ownerId）
-  async confirmPlan(id: number) {
-    const tr = await this.findOne(id);
+  async confirmPlan(id: number, user: AuthUser) {
+    const tr = await this.findOne(id, user);
+    this.permissions.ensure(
+      this.permissions.canConfirmTenantPlan(user, tr),
+      '只有客户主理人或管理员可以确认托管方案',
+    );
 
     if (tr.planConfirmedByOwner) {
       throw new BadRequestException('服务方案已经确认，无需重复确认');
@@ -150,7 +168,7 @@ export class TenantRegistersService {
 
   private includes() {
     return {
-      customer: { select: { id: true, companyName: true, customerCategory: true } },
+      customer: { select: { id: true, companyName: true, customerCategory: true, ownerId: true } },
       assignedAccountant: { select: { id: true, realName: true } },
     };
   }

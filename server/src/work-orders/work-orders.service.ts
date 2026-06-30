@@ -8,13 +8,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
 import { UpdateWorkOrderDto } from './dto/update-work-order.dto';
 import { WorkOrderStatus } from '../../generated/prisma/client';
+import { AuthUser, PermissionService } from '../permissions/permissions.service';
 
 @Injectable()
 export class WorkOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   // 创建办件
-  async create(dto: CreateWorkOrderDto) {
+  async create(dto: CreateWorkOrderDto, user: AuthUser) {
     // 验证服务项存在，并拿到 customerId
     const item = await this.prisma.serviceItem.findUnique({
       where: { id: dto.serviceItemId },
@@ -23,6 +27,14 @@ export class WorkOrdersService {
     if (!item) {
       throw new NotFoundException(`服务项 id=${dto.serviceItemId} 不存在`);
     }
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: item.customerId },
+      include: { staffAssignment: true, tenantRegister: true },
+    });
+    this.permissions.ensure(
+      !!customer && this.permissions.canReadCustomer(user, customer),
+      '无权限为该服务项创建办件',
+    );
 
     // 验证该服务项还没有办件
     const existing = await this.prisma.workOrder.findUnique({
@@ -70,8 +82,8 @@ export class WorkOrdersService {
     customerId?: number;
     handlerId?: number;
     status?: WorkOrderStatus;
-  }) {
-    const where: any = {};
+  }, user: AuthUser) {
+    const where: any = this.permissions.workOrderVisibleWhere(user);
     if (query.customerId) where.customerId = query.customerId;
     if (query.handlerId) where.handlerId = query.handlerId;
     if (query.status) where.status = query.status;
@@ -84,18 +96,28 @@ export class WorkOrdersService {
   }
 
   // 详情
-  async findOne(id: number) {
+  async findOne(id: number, user?: AuthUser) {
     const wo = await this.prisma.workOrder.findUnique({
       where: { id },
-      include: this.includes(),
+      include: this.includesWithPermission(),
     });
     if (!wo) throw new NotFoundException(`办件 id=${id} 不存在`);
+    if (user) {
+      this.permissions.ensure(
+        this.permissions.canReadWorkOrder(user, wo),
+        '无权限访问该办件',
+      );
+    }
     return wo;
   }
 
   // 更新（不允许直接改"已打卡"）
-  async update(id: number, dto: UpdateWorkOrderDto) {
-    const wo = await this.findOne(id);
+  async update(id: number, dto: UpdateWorkOrderDto, user: AuthUser) {
+    const wo = await this.findOne(id, user);
+    this.permissions.ensure(
+      this.permissions.canOperateWorkOrder(user, wo),
+      '无权限处理该办件',
+    );
 
     // 不允许 PATCH 把 status 直接改成"已打卡"
     if (dto.status === '已打卡') {
@@ -126,8 +148,12 @@ export class WorkOrdersService {
   }
 
   // 办结打卡 —— 必须传 archiveFiles，且当前 status 必须是"办结"
-  async checkIn(id: number, archiveFiles: any[]) {
-    const wo = await this.findOne(id);
+  async checkIn(id: number, archiveFiles: any[], user: AuthUser) {
+    const wo = await this.findOne(id, user);
+    this.permissions.ensure(
+      this.permissions.canOperateWorkOrder(user, wo),
+      '无权限打卡该办件',
+    );
 
     if (wo.status !== '办结') {
       throw new BadRequestException(
@@ -156,6 +182,26 @@ export class WorkOrdersService {
   private includes() {
     return {
       customer: { select: { id: true, companyName: true } },
+      serviceItem: {
+        select: {
+          id: true,
+          status: true,
+          serviceTemplate: { select: { id: true, serviceType: true } },
+        },
+      },
+      handler: { select: { id: true, realName: true } },
+      receiptReceiver: { select: { id: true, realName: true } },
+    };
+  }
+
+  private includesWithPermission() {
+    return {
+      customer: {
+        include: {
+          staffAssignment: true,
+          tenantRegister: true,
+        },
+      },
       serviceItem: {
         select: {
           id: true,

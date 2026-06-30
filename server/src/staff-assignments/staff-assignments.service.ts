@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthUser, PermissionService } from '../permissions/permissions.service';
 
 @Injectable()
 export class StaffAssignmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   // 创建或更新人员配置（PUT upsert）
   async upsert(
@@ -14,6 +18,7 @@ export class StaffAssignmentsService {
       consultantId?: number;
       generalAffairsId?: number;
     },
+    user: AuthUser,
   ) {
     // 验证客户存在
     const customer = await this.prisma.customer.findUnique({
@@ -22,6 +27,10 @@ export class StaffAssignmentsService {
     if (!customer) {
       throw new NotFoundException(`客户 id=${customerId} 不存在`);
     }
+    this.permissions.ensure(
+      this.permissions.canConfigureStaff(user, customer),
+      '无权限配置该客户人员',
+    );
 
     // 角色校验
     await this.validateRole(data.businessStaffId, ['商务', '业务'], '业务岗');
@@ -54,7 +63,19 @@ export class StaffAssignmentsService {
   }
 
   // 查客户的人员配置
-  async findByCustomer(customerId: number) {
+  async findByCustomer(customerId: number, user: AuthUser) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { staffAssignment: true, tenantRegister: true },
+    });
+    if (!customer) {
+      throw new NotFoundException(`客户 id=${customerId} 不存在`);
+    }
+    this.permissions.ensure(
+      this.permissions.canReadCustomer(user, customer),
+      '无权限查看该客户人员配置',
+    );
+
     const assignment = await this.prisma.staffAssignment.findUnique({
       where: { customerId },
       include: {
