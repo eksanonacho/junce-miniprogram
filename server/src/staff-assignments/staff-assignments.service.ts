@@ -86,10 +86,6 @@ export class StaffAssignmentsService {
       },
     });
 
-    if (!assignment) {
-      throw new NotFoundException(`客户 id=${customerId} 尚未配置人员`);
-    }
-
     return assignment;
   }
 
