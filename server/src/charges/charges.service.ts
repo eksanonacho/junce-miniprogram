@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { UpdateChargeDto } from './dto/update-charge.dto';
 import { ChargeStatus } from '../../generated/prisma/client';
@@ -15,6 +16,7 @@ export class ChargesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // 创建收费记录（所有登录角色，TODO: 后续可能限商务/总务/管理员）
@@ -49,6 +51,13 @@ export class ChargesService {
       data: dto,
       include: this.includes(),
     });
+
+    // 通知全部总务
+    this.notifications.createForRole({
+      type: 'charge', title: '新收费待确认', body: `客户【${customer.companyName}】新增收费 ¥${Number(charge.amount.toString())}`,
+      senderId: user.sub, roleTarget: '总务', targetType: 'charge', targetId: charge.id,
+    }).catch(() => {});
+
     return { ...charge, amount: Number(charge.amount.toString()) };
   }
 
@@ -110,6 +119,15 @@ export class ChargesService {
       },
       include: this.includes(),
     });
+
+    // 通知客户主理人（商务）
+    if (charge.customer?.ownerId) {
+      this.notifications.create({
+        type: 'charge', title: '收费已确认', body: `客户【${charge.customer.companyName}】收费 ¥${Number(updated.amount.toString())} 已确认收款`,
+        senderId: userId, receiverId: charge.customer.ownerId, targetType: 'charge', targetId: id,
+      }).catch(() => {});
+    }
+
     return { ...updated, amount: Number(updated.amount.toString()) };
   }
 
@@ -128,7 +146,7 @@ export class ChargesService {
     const toUser = await this.prisma.user.findUnique({ where: { id: targetUserId } });
     if (!toUser) throw new NotFoundException(`用户 id=${targetUserId} 不存在`);
 
-    return this.prisma.collectionReminder.create({
+    const reminder = await this.prisma.collectionReminder.create({
       data: {
         chargeId: id,
         fromUserId,
@@ -140,6 +158,13 @@ export class ChargesService {
         toUser: { select: { id: true, realName: true } },
       },
     });
+
+    this.notifications.create({
+      type: 'charge', title: '催收提醒', body: `客户【${charge.customer.companyName}】收费未完成，请尽快处理`,
+      senderId: fromUserId, receiverId: targetUserId, targetType: 'charge', targetId: id,
+    }).catch(() => {});
+
+    return reminder;
   }
 
   // 查催收记录
@@ -160,7 +185,7 @@ export class ChargesService {
   private async findOneRaw(id: number) {
     const charge = await this.prisma.charge.findUnique({
       where: { id },
-      include: { customer: { select: { id: true, ownerId: true } } },
+      include: { customer: { select: { id: true, ownerId: true, companyName: true } } },
     });
     if (!charge) throw new NotFoundException(`收费记录 id=${id} 不存在`);
     return charge;

@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
 import { UpdateWorkOrderDto } from './dto/update-work-order.dto';
 import { WorkOrderStatus } from '../../generated/prisma/client';
@@ -15,6 +16,7 @@ export class WorkOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // 创建办件
@@ -66,7 +68,7 @@ export class WorkOrdersService {
       await this.validateUser(dto.receiptReceiverId);
     }
 
-    return this.prisma.workOrder.create({
+    const wo = await this.prisma.workOrder.create({
       data: {
         customerId: item.customerId,
         serviceItemId: dto.serviceItemId,
@@ -75,6 +77,21 @@ export class WorkOrdersService {
       },
       include: this.includes(),
     });
+
+    // 通知处理人（业务）
+    if (dto.handlerId) {
+      this.notifications.create({
+        type: 'work_order',
+        title: '新办件待处理',
+        body: `客户【${customer?.companyName || '—'}】-【${item.serviceTemplate.serviceType}】的办件已分配给你`,
+        senderId: user.sub,
+        receiverId: dto.handlerId,
+        targetType: 'work_order',
+        targetId: wo.id,
+      }).catch(() => {});
+    }
+
+    return wo;
   }
 
   // 列表
@@ -140,11 +157,27 @@ export class WorkOrdersService {
     // TODO: 后续 WorkOrder status 变化可同步更新 ServiceItem.status，
     // 避免服务项状态和办件状态不一致。本期暂不联动。
 
-    return this.prisma.workOrder.update({
+    const updated = await this.prisma.workOrder.update({
       where: { id },
       data,
       include: this.includes(),
     });
+
+    // 办结时通知商务
+    if (dto.status === '办结' && wo.customer?.ownerId) {
+      const svcType = wo.serviceItem?.serviceTemplate?.serviceType || '—';
+      this.notifications.create({
+        type: 'work_order',
+        title: '办件已办结',
+        body: `客户【${wo.customer?.companyName || '—'}】-【${svcType}】的办件已办结`,
+        senderId: user.sub,
+        receiverId: wo.customer.ownerId,
+        targetType: 'work_order',
+        targetId: id,
+      }).catch(() => {});
+    }
+
+    return updated;
   }
 
   // 办结打卡 —— 必须传 archiveFiles，且当前 status 必须是"办结"
@@ -161,7 +194,7 @@ export class WorkOrdersService {
       );
     }
 
-    return this.prisma.workOrder.update({
+    const result = await this.prisma.workOrder.update({
       where: { id },
       data: {
         status: '已打卡',
@@ -170,6 +203,22 @@ export class WorkOrdersService {
       },
       include: this.includes(),
     });
+
+    // 通知商务
+    if (wo.customer?.ownerId) {
+      const svcType = wo.serviceItem?.serviceTemplate?.serviceType || '—';
+      this.notifications.create({
+        type: 'work_order',
+        title: '办件已归档',
+        body: `客户【${wo.customer?.companyName || '—'}】-【${svcType}】的办件已归档`,
+        senderId: user.sub,
+        receiverId: wo.customer.ownerId,
+        targetType: 'work_order',
+        targetId: id,
+      }).catch(() => {});
+    }
+
+    return result;
   }
 
   // ---- helpers ----

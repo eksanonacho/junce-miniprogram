@@ -97,6 +97,12 @@ export class ServiceItemsService {
             estimatedDuration: true,
           },
         },
+        workOrder: {
+          include: {
+            handler: { select: { id: true, realName: true } },
+            receiptReceiver: { select: { id: true, realName: true } },
+          },
+        },
       },
       orderBy: { id: 'asc' },
     });

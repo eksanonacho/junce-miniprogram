@@ -18,6 +18,7 @@ import { FissionLeadsModule } from './fission-leads/fission-leads.module';
 import { ManualDashboardModule } from './manual-dashboard/manual-dashboard.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { WorkbenchModule } from './workbench/workbench.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -44,6 +45,7 @@ import { AppService } from './app.service';
     ManualDashboardModule,
     PermissionsModule,
     WorkbenchModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

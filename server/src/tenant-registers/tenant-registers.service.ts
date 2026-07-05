@@ -6,6 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser, PermissionService } from '../permissions/permissions.service';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class TenantRegistersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // 创建（会计/主管/管理员）
@@ -41,7 +43,7 @@ export class TenantRegistersService {
       });
     }
 
-    return this.prisma.tenantRegister.create({
+    const tr = await this.prisma.tenantRegister.create({
       data: {
         customerId: dto.customerId,
         enterpriseDetail: dto.enterpriseDetail,
@@ -49,6 +51,16 @@ export class TenantRegistersService {
       },
       include: this.includes(),
     });
+
+    // 通知商务确认方案
+    if (customer.ownerId) {
+      this.notifications.create({
+        type: 'tenant', title: '托管方案待确认', body: `客户【${customer.companyName}】的托管入档方案已生成，请确认服务方案`,
+        receiverId: customer.ownerId, targetType: 'tenant', targetId: tr.id,
+      }).catch(() => {});
+    }
+
+    return tr;
   }
 
   // 详情
@@ -129,11 +141,18 @@ export class TenantRegistersService {
       );
     }
 
-    return this.prisma.tenantRegister.update({
+    const updated = await this.prisma.tenantRegister.update({
       where: { id },
       data: { assignedAccountantId: accountantId },
       include: this.includes(),
     });
+
+    this.notifications.create({
+      type: 'tenant', title: '托管分派', body: `你已被分配为客户【${updated.customer?.companyName || '—'}】的负责会计`,
+      receiverId: accountantId, targetType: 'tenant', targetId: id,
+    }).catch(() => {});
+
+    return updated;
   }
 
   // 会计确认分派（会计/管理员）

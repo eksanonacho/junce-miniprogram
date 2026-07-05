@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class FissionLeadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   // 创建（所有登录角色）
   async create(dto: any, initiatedById: number) {
@@ -13,10 +17,18 @@ export class FissionLeadsService {
     }
     if (dto.assigneeId) await this.validateUser(dto.assigneeId);
 
-    return this.prisma.fissionLead.create({
+    const lead = await this.prisma.fissionLead.create({
       data: { ...dto, initiatedById },
       include: this.includes(),
     });
+
+    // 通知全部主管审批
+    this.notifications.createForRole({
+      type: 'fission', title: '裂变线索待审批', body: `新裂变线索：【${dto.leadName || '—'}】，¥${dto.price || 0}`,
+      senderId: initiatedById, roleTarget: '主管', targetType: 'fission', targetId: lead.id,
+    }).catch(() => {});
+
+    return lead;
   }
 
   // 列表
@@ -58,11 +70,19 @@ export class FissionLeadsService {
   async confirm(id: number, userId: number) {
     const lead = await this.findOne(id);
     if (lead.status !== '待确认') throw new BadRequestException(`当前状态为"${lead.status}"，只有"待确认"状态才能确认`);
-    return this.prisma.fissionLead.update({
+    const updated = await this.prisma.fissionLead.update({
       where: { id },
       data: { status: '已确认', confirmedById: userId, confirmedAt: new Date() },
       include: this.includes(),
     });
+
+    // 通知创建人
+    this.notifications.create({
+      type: 'fission', title: '裂变已确认', body: `裂变线索【${lead.leadName}】已被确认`,
+      senderId: userId, receiverId: lead.initiatedById, targetType: 'fission', targetId: id,
+    }).catch(() => {});
+
+    return updated;
   }
 
   // 归档（主管+管理员）

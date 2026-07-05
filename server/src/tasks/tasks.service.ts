@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { TaskStatus } from '../../generated/prisma/client';
 import { AuthUser, PermissionService } from '../permissions/permissions.service';
 
@@ -13,6 +14,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // 创建任务（主管/管理员）
@@ -26,7 +28,7 @@ export class TasksService {
       if (!customer) throw new NotFoundException(`客户 id=${dto.customerId} 不存在`);
     }
 
-    return this.prisma.task.create({
+    const task = await this.prisma.task.create({
       data: {
         title: dto.title,
         content: dto.content,
@@ -38,6 +40,13 @@ export class TasksService {
       },
       include: this.includes(),
     });
+
+    this.notifications.create({
+      type: 'task', title: '新任务', body: `新任务：【${dto.title}】，截止【${dto.deadline || '未设'}】`,
+      senderId: fromUserId, receiverId: dto.toUserId, targetType: 'task', targetId: task.id,
+    }).catch(() => {});
+
+    return task;
   }
 
   // 列表
@@ -102,7 +111,7 @@ export class TasksService {
 
     this.ensureActor(task.toUserId, userId, roleCode, '确认');
 
-    return this.prisma.task.update({
+    const result = await this.prisma.task.update({
       where: { id },
       data: {
         status: '进行中',
@@ -111,6 +120,13 @@ export class TasksService {
       },
       include: this.includes(),
     });
+
+    this.notifications.create({
+      type: 'task', title: '任务已确认', body: `任务【${task.title}】已被确认`,
+      senderId: userId, receiverId: task.fromUserId, targetType: 'task', targetId: id,
+    }).catch(() => {});
+
+    return result;
   }
 
   // 完成任务
@@ -123,7 +139,7 @@ export class TasksService {
 
     this.ensureActor(task.toUserId, userId, roleCode, '完成');
 
-    return this.prisma.task.update({
+    const result = await this.prisma.task.update({
       where: { id },
       data: {
         status: '已完成',
@@ -132,6 +148,13 @@ export class TasksService {
       },
       include: this.includes(),
     });
+
+    this.notifications.create({
+      type: 'task', title: '任务已完成', body: `任务【${task.title}】已完成`,
+      senderId: userId, receiverId: task.fromUserId, targetType: 'task', targetId: id,
+    }).catch(() => {});
+
+    return result;
   }
 
   // ---- helpers ----

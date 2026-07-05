@@ -471,3 +471,22 @@ model ManualSalaryReport {
   @@unique([month, userId], name: "unique_month_user")
   @@map("manual_salary_reports")
 }
+
+// ---- 消息通知表 ----
+model Notification {
+  id          Int       @id @default(autoincrement())
+  type        String                        // work_order / task / charge / tenant / fission / system
+  title       String
+  body        String
+  senderId    Int?     @map("sender_id")
+  receiverId  Int      @map("receiver_id")
+  roleTarget  String?  @map("role_target")
+  targetType  String?  @map("target_type")
+  targetId    Int?     @map("target_id")
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([receiverId, isRead])
+  @@index([receiverId, createdAt])
+  @@map("notifications")
+}
