@@ -1,0 +1,49 @@
+@import './styles/tokens.scss';
+
+/* uni-app compatibility variables mapped to Junce tokens. */
+$uni-color-primary: $color-primary;
+$uni-color-success: $color-success;
+$uni-color-warning: $color-warning;
+$uni-color-error: $color-error-core;
+
+$uni-text-color: $color-on-surface;
+$uni-text-color-inverse: $color-on-primary;
+$uni-text-color-grey: $color-on-surface-variant;
+$uni-text-color-placeholder: $color-outline;
+$uni-text-color-disable: rgba($color-on-surface-variant, 0.46);
+
+$uni-bg-color: $color-surface;
+$uni-bg-color-grey: $color-surface-container;
+$uni-bg-color-hover: $color-surface-container-low;
+$uni-bg-color-mask: rgba(0, 0, 0, 0.6);
+
+$uni-border-color: $color-outline-variant;
+
+$uni-font-size-sm: 22rpx;
+$uni-font-size-base: 30rpx;
+$uni-font-size-lg: 36rpx;
+
+$uni-img-size-sm: 40rpx;
+$uni-img-size-base: 52rpx;
+$uni-img-size-lg: 80rpx;
+
+$uni-border-radius-sm: $radius-sm;
+$uni-border-radius-base: $radius-md;
+$uni-border-radius-lg: $radius-lg;
+$uni-border-radius-circle: 50%;
+
+$uni-spacing-row-sm: $space-1;
+$uni-spacing-row-base: $space-2;
+$uni-spacing-row-lg: $space-3;
+$uni-spacing-col-sm: $space-1;
+$uni-spacing-col-base: $space-2;
+$uni-spacing-col-lg: $space-3;
+
+$uni-opacity-disabled: 0.42;
+
+$uni-color-title: $color-on-surface;
+$uni-font-size-title: 40rpx;
+$uni-color-subtitle: $color-on-surface-variant;
+$uni-font-size-subtitle: 32rpx;
+$uni-color-paragraph: $color-on-surface-variant;
+$uni-font-size-paragraph: 30rpx;

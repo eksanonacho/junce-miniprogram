@@ -1,0 +1,160 @@
+{
+	"pages": [
+		{
+			"path": "pages/login/login",
+			"style": {
+				"navigationBarTitleText": "登录"
+			}
+		},
+		{
+			"path": "pages/home/home",
+			"style": {
+				"navigationBarTitleText": "君册财税"
+			}
+		},
+		{
+			"path": "pages/customer-list/customer-list",
+			"style": {
+				"navigationBarTitleText": "客户列表"
+			}
+		},
+		{
+			"path": "pages/customer-edit/customer-edit",
+			"style": {
+				"navigationBarTitleText": "编辑客户"
+			}
+		},
+		{
+			"path": "pages/customer-detail/customer-detail",
+			"style": {
+				"navigationBarTitleText": "客户详情"
+			}
+		},
+		{
+			"path": "pages/customer-form/customer-form",
+			"style": {
+				"navigationBarTitleText": "客户填单"
+			}
+		},
+		{
+			"path": "pages/service-template-select/service-template-select",
+			"style": {
+				"navigationBarTitleText": "选择服务"
+			}
+		},
+		{
+			"path": "pages/staff-config/staff-config",
+			"style": {
+				"navigationBarTitleText": "人员配置"
+			}
+		},
+		{
+			"path": "pages/workorder-list/workorder-list",
+			"style": {
+				"navigationBarTitleText": "办件列表"
+			}
+		},
+		{
+			"path": "pages/workorder-create/workorder-create",
+			"style": {
+				"navigationBarTitleText": "创建办件"
+			}
+		},
+		{
+			"path": "pages/workorder-detail/workorder-detail",
+			"style": {
+				"navigationBarTitleText": "办件详情"
+			}
+		},
+		{
+			"path": "pages/charge-detail/charge-detail",
+			"style": {
+				"navigationBarTitleText": "收费详情"
+			}
+		},
+		{
+			"path": "pages/charge-unpaid-list/charge-unpaid-list",
+			"style": {
+				"navigationBarTitleText": "未收款列表"
+			}
+		},
+		{
+			"path": "pages/tenant-detail/tenant-detail",
+			"style": {
+				"navigationBarTitleText": "托管入档"
+			}
+		},
+		{
+			"path": "pages/task-list/task-list",
+			"style": {
+				"navigationBarTitleText": "任务列表"
+			}
+		},
+		{
+			"path": "pages/task-detail/task-detail",
+			"style": {
+				"navigationBarTitleText": "任务详情"
+			}
+		},
+		{
+			"path": "pages/task-create/task-create",
+			"style": {
+				"navigationBarTitleText": "创建任务"
+			}
+		},
+		{
+			"path": "pages/fission-list/fission-list",
+			"style": {
+				"navigationBarTitleText": "裂变线索"
+			}
+		},
+		{
+			"path": "pages/fission-detail/fission-detail",
+			"style": {
+				"navigationBarTitleText": "线索详情"
+			}
+		},
+		{
+			"path": "pages/fission-create/fission-create",
+			"style": {
+				"navigationBarTitleText": "新建线索"
+			}
+		},
+		{
+			"path": "pages/manual-business/manual-business",
+			"style": {
+				"navigationBarTitleText": "经营看板"
+			}
+		},
+		{
+			"path": "pages/manual-salary/manual-salary",
+			"style": {
+				"navigationBarTitleText": "工资看板"
+			}
+		},
+		{
+			"path": "pages/dashboard/dashboard",
+			"style": {
+				"navigationBarTitleText": "数据看板"
+			}
+		},
+		{
+			"path": "pages/notification-list/notification-list",
+			"style": {
+				"navigationBarTitleText": "消息中心"
+			}
+		},
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "uni-app"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "君册财税",
+		"navigationBarBackgroundColor": "#c9c6c5",
+		"backgroundColor": "#c9c6c5"
+	}
+}
