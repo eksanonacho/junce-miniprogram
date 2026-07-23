@@ -754,3 +754,65 @@ ServiceTemplate 是"服务目录"，ServiceItem 是"客户选了哪个"。外键
 
 ### 测试报告位置
 `docs/REGRESSION_TEST_REPORT_2026-06-11.md`
+
+## 2026-07-24 第20步: 交付检查与修复
+
+**做了什么**：
+- 配合 coworker 执行 COWORKER_DELIVERY_CHECKLIST.md 交付核对
+- 修复前端 package-lock.json（npm ci 失败，lockfile 缺少依赖）
+- 补齐 Notification migration（20260724030925_add_notifications），之前仅通过 prisma db push 创建
+- 修复 server/.gitignore 中 *.sql 规则误杀 migration 文件（增加 !prisma/migrations/**/*.sql）
+- 新建空数据库 junce_migration_test，验证 11 个 migration 从零全部 deploy 成功（17 张表含 notifications）
+- E2E 测试 3 套件 / 16 测试全部通过（隔离数据库 seed 后运行）
+- 单元测试 1/1 通过
+- H5 build 通过，mp-weixin build 通过
+- npm ci 验证通过（干净环境重新安装）
+
+**大白话解释**：
+- lockfile 就是"锁文件"，记录了每个依赖包的确切版本。之前 package.json 增加了新依赖但没更新锁文件，导致别人 clone 后 npm ci 安装失败
+- migration 就是"数据库建表脚本"，通知表之前是直接推到数据库的（db push），没有保存脚本。现在补上了，新环境可以从零建表
+- E2E 就是"端到端测试"，模拟真实用户操作验证整个系统能跑通
+
+**踩过的坑**：
+- .gitignore 中 *.sql 规则太宽泛，不仅屏蔽了数据库备份文件，还把 Prisma migration SQL 文件也屏蔽了。修复：加 !prisma/migrations/**/*.sql 白名单
+- prisma migrate diff 在 Prisma 7 上需要 shadowDatabaseUrl 配置，改用 prisma migrate dev --create-only 或手动写 SQL
+- E2E 测试依赖 seed 数据（测试账号），空数据库需要先 seed 再跑测试
+
+**验证命令**：
+```bash
+cd server
+pnpm exec prisma validate
+pnpm exec prisma generate
+pnpm build
+pnpm exec jest --runInBand                     # 单元测试 1/1
+DATABASE_URL=... npm run test:e2e              # E2E 16/16
+DATABASE_URL=... npx prisma migrate deploy     # 空数据库 11 migrations
+cd junce-miniprogram-frontend
+npm ci
+npm run build:h5
+npm run build:mp-weixin
+```
+
+**下一步**：
+- 微信开发者工具全页面多角色回归验收
+- 真机测试
+- 生产环境部署准备
+
+## 2026-07-24 第21步: 文档全面更新
+
+**做了什么**：
+- 补齐 docs/API_CONTRACT.md：新增 Workbench（16.1）和 Notifications（17.1-17.4），接口总数 55→60
+- 更新 docs/README.md：18 模块/60 接口，目录树标注旧 client/ 废弃
+- 更新 docs/PROJECT_STATE_SNAPSHOT.md：快照日期 2026-07-24，新增 Workbench/Notifications/前端全模块状态
+- 更新 docs/ROADMAP.md、docs/FRONTEND_HANDOFF.md、docs/PROJECT_CONTEXT.md：日期和计数
+- 更新 docs/TEST_RESULTS.md：新增 2026-07-24 交付测试结果
+- 前端 junce-miniprogram-frontend/docs/API_CONTRACT.md 标注过时，指向根目录权威版本
+- 前端 README.md 从"5 页面"更新为"25 页面/10 组件/60 接口"
+- 批量更新所有 docs 中 55→60、56→61、23/24→25、12/17→18 等计数
+
+**大白话解释**：
+- 文档和代码脱节是常见问题。代码一直在变，但写文档很费时间。这次把从 6 月到 7 月的所有变化（新模块、新页面、新测试结果）都一次性同步到文档中
+- "权威版本"的意思是：以后只有根目录 docs/API_CONTRACT.md 是正式接口文档，前端目录下的副本不再维护
+
+**下一步**：
+- commit & push 所有文档更新

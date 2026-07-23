@@ -7,12 +7,12 @@
 
 | 项 | 值 |
 |---|---|
-| 当前阶段 | 第九阶段 联调通过 ✅（Phase 1-9 共 55/55 业务接口全部联调通过） |
+| 当前阶段 | 第九阶段 联调通过 ✅（Phase 1-9 共 60/60 业务接口全部联调通过） |
 | BASE_URL | `http://172.20.10.5:3000`（局域网 IP，会变） |
 | H5 运行 | ✅ 正常 |
 | 微信小程序 | 未完整测试 |
-| 已联调接口 | 55/55 业务接口全部联调通过（Phase 1-9 全部完成 + Files 文件上传） |
-| 后端接口总数 | 56 个就绪 |
+| 已联调接口 | 60/60 业务接口全部联调通过（Phase 1-9 全部完成 + Files 文件上传） |
+| 后端接口总数 | 61 个就绪 |
 
 ## 已完成页面
 
@@ -107,7 +107,7 @@
 | `GET /dashboard/tasks` | ✅ 联调通过 |
 | `GET /dashboard/charges` | ✅ 联调通过 |
 | `POST /files/upload` | ✅ 联调通过（Phase 3 A-2 专项验收 + Phase 7 复用） |
-| 其余 0 个接口 | 🎉 55/55 业务接口全部联调完成 |
+| 其余 0 个接口 | 🎉 60/60 业务接口全部联调完成 |
 
 ## 请求封装状态
 
@@ -189,19 +189,19 @@
 - Phase 9 联调通过 ✅ 5/5 PASS，P0=0
 - 总务正确拦截（403），主管/管理员正常访问
 - pages.json 注册 1 个新路由，共计 23 条路由
-- 🎉 Phase 1-9 全部 55/55 业务接口联调完成
+- 🎉 Phase 1-9 + Workbench + Notifications 全部 60/60 业务接口联调完成
 - Phase 8 手动经营/工资看板整体编码完成（manual-business + manual-salary）
 - ManualDashboard 全量联调通过 ✅ 8/8 PASS，P0=0
 - profitAmount/totalAmount 零提交；金额字段均为 number；month 格式校验通过
 - pages.json 注册 2 个新路由，共计 22 条路由
-- Phase 1-8 累计 49/55 业务接口联调完成
+- Phase 1-8 累计 49/60 业务接口联调完成
 - Phase 7 业务裂变整体编码完成（fission-list + fission-detail + fission-create）
 - fission-detail 支持 view/edit + confirm/archive/mark-invalid + archiveFiles 上传
 - Fission 全量联调通过 ✅ 7/7 PASS，P0=0
 - 字段确认：initiatedBy/confirmer/archiver 路径全部正确命中
 - P1-1 修复：PATCH 不传 null（sourceCustomerId/assigneeId/price）
 - pages.json 注册 3 个新路由，共计 20 条路由
-- Phase 1-7 全部 48 接口联调完成
+- Phase 1-7 全部 48 接口（历史）联调完成
 - Phase 6 任务流转整体编码完成（task-list + task-detail + task-create）
 - task-detail 支持 view/edit 双模式 + confirm/complete 操作 + onShow 刷新
 - Task 全量联调通过 ✅ 6/6 PASS，P0=0

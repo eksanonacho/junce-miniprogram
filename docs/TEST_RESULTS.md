@@ -215,3 +215,44 @@
 - GET /health ✅
 - nginx 反向代理 ✅
 - 3000/5432 端口对外不可访问 ✅
+
+---
+
+## 2026-07-24 交付检查测试
+
+### 空数据库迁移验证
+
+| 测试项 | 预期 | 结果 |
+|--------|------|:--:|
+| prisma migrate deploy（空库） | 11 migrations 全部应用 | ✅ |
+| notifications 表创建 | 表存在，含索引 | ✅ |
+| prisma migrate status | Database up to date | ✅ |
+| 无 prisma db push | 无需手动干预 | ✅ |
+
+### E2E 测试（隔离数据库 junce_migration_test）
+
+**3 套件 / 16 测试 全部通过：**
+
+| 套件 | 测试数 | 结果 |
+|------|:--:|:--:|
+| App (e2e) | 1 | ✅ |
+| Permissions (e2e) | 10 | ✅ |
+| Workbench (e2e) | 5 | ✅ |
+
+### 前端构建
+
+| 测试项 | 结果 |
+|--------|:--:|
+| npm ci（干净安装） | ✅ |
+| H5 build | ✅ |
+| mp-weixin build | ✅ |
+
+### 后端
+
+| 测试项 | 结果 |
+|--------|:--:|
+| Prisma validate | ✅ |
+| Prisma generate | ✅ |
+| NestJS build | ✅ |
+| 单元测试 | 1/1 ✅ |
+

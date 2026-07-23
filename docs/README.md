@@ -12,7 +12,7 @@
 
 **终端**：微信小程序 + H5（uni-app 一套代码双端）。
 
-**当前阶段**：后端封板（12 模块，55 业务接口 + 1 基础设施接口），Docker 部署基础设施就绪，前端全模块联调中。
+**当前阶段**：后端封板（18 模块，60 业务接口 + 1 基础设施接口），Docker 部署基础设施就绪，前端全模块联调通过。2026-07-24 交付检查通过：migration 补齐、lockfile 修复、E2E 16/16 通过、空数据库迁移验证通过。
 
 ---
 
@@ -53,7 +53,8 @@ junce-miniprogram/
 │   ├── FRONTEND_HANDOFF.md      # 前端交接说明
 │   ├── COWORKER_DELIVERY_CHECKLIST.md # Coworker 最终交付核对清单
 │   └── DEPLOYMENT_GUIDE.md      # 部署指南
-├── client/                      # uni-app 前端
+├── junce-miniprogram-frontend/   # 正式前端（uni-app Vue3）
+├── client/                       # 旧前端骨架（已废弃，勿继续开发）                      # uni-app 前端
 │   └── src/pages/               # 页面（前端同学负责）
 ├── server/                      # NestJS 后端
 │   ├── prisma/
@@ -96,69 +97,11 @@ junce-miniprogram/
 | **Dashboard** | 5 统计接口、纯聚合查询、@Roles(主管+管理员) | ✅ |
 | **Files** | multer 本地存储、10MB 限制、扩展名白名单 | ✅ |
 
-### 当前接口清单（47 个）
+### 当前接口清单（60 个业务接口 + 1 个基础设施接口）
 
-```
-POST   /auth/login                          # 登录
-GET    /auth/me                             # 当前用户
-GET    /auth/admin-only                     # 权限验证
+完整接口文档见 [API_CONTRACT.md](API_CONTRACT.md)。模块覆盖：Auth/Customers/ServiceTemplates/ServiceItems/StaffAssignments/Users/WorkOrders/Charges/TenantRegisters/Tasks/Dashboard/Files/FissionLeads/ManualDashboard/Workbench/Notifications。
 
-POST   /customers                           # 新建客户
-GET    /customers                           # 客户列表（筛选/搜索）
-GET    /customers/:id                       # 客户详情
-PATCH  /customers/:id                       # 修改客户
-
-GET    /service-templates                   # 服务模板列表
-GET    /service-templates/:id               # 模板详情
-POST   /service-read-confirmations          # 提交已读确认
-GET    /service-read-confirmations          # 查询确认记录
-
-POST   /customers/:customerId/service-items # 批量添加服务项
-GET    /customers/:customerId/service-items # 客户服务项列表
-PATCH  /service-items/:id                   # 修改服务项状态
-
-PUT    /customers/:customerId/staff-assignment # 配置人员
-GET    /customers/:customerId/staff-assignment # 查人员配置
-
-GET    /users                                # 用户列表
-GET    /users?roleCode=会计                  # 按角色筛选
-
-POST   /work-orders                          # 创建办件
-GET    /work-orders                          # 办件列表
-GET    /work-orders/:id                      # 办件详情
-PATCH  /work-orders/:id                      # 更新办件
-POST   /work-orders/:id/check-in             # 办结打卡
-
-POST   /charges                               # 创建收费
-GET    /charges                               # 查询收费(按状态筛选)
-PATCH  /charges/:id                           # 修改收费(总务+管理员)
-POST   /charges/:id/confirm                   # 确认已收(总务+管理员)
-POST   /charges/:id/remind                    # 发起催收(总务+管理员)
-GET    /charges/:id/reminders                 # 催收记录
-
-POST   /tenant-registers                      # 创建托管入档(会计+主管+管理员)
-GET    /tenant-registers/:id                  # 托管详情
-PATCH  /tenant-registers/:id                  # 更新概况/方案
-POST   /tenant-registers/:id/confirm-plan     # 主理人确认方案
-POST   /tenant-registers/:id/assign-accountant # 分派会计(主管+管理员)
-POST   /tenant-registers/:id/confirm-assignment # 会计确认分派(须本人)
-
-POST   /tasks                                 # 创建任务
-GET    /tasks                                 # 任务列表
-PATCH  /tasks/:id                             # 更新任务
-POST   /tasks/:id/confirm                     # 确认任务
-POST   /tasks/:id/complete                    # 完成任务
-
-GET    /dashboard/overview                    # 老板总览
-GET    /dashboard/customers                   # 客户看板
-GET    /dashboard/services                    # 服务看板
-GET    /dashboard/tasks                       # 任务看板
-GET    /dashboard/charges                     # 收费看板
-
-POST   /files/upload                          # 文件上传
-```
-
-全部已 curl 验证通过（正向 + 反向 401/403）。
+2026-07-24 新增：Workbench（1 个）、Notifications（4 个）。全部接口已 curl 验证通过（正向 + 反向 401/403），E2E 测试 16/16 通过。
 
 ---
 
@@ -286,4 +229,4 @@ curl -s --noproxy "*" http://localhost:3000/customers \
 
 ---
 
-> 最后更新：2026-06-24
+> 最后更新：2026-07-24
