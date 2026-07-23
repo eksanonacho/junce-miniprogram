@@ -11,6 +11,7 @@ dist
 uploads/*
 !uploads/.gitkeep
 
-# Database backups
+# Database backups (but NOT Prisma migration SQL files)
 *.dump
 *.sql
+!prisma/migrations/**/*.sql
