@@ -51,6 +51,7 @@ junce-miniprogram/
 │   ├── RISK_ANALYSIS.md         # 风险分析
 │   ├── CTO_NOTES.md             # 技术负责人提醒
 │   ├── FRONTEND_HANDOFF.md      # 前端交接说明
+│   ├── COWORKER_DELIVERY_CHECKLIST.md # Coworker 最终交付核对清单
 │   └── DEPLOYMENT_GUIDE.md      # 部署指南
 ├── client/                      # uni-app 前端
 │   └── src/pages/               # 页面（前端同学负责）
