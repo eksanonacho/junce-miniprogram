@@ -3,7 +3,7 @@
 > **这个文件是给谁看的**:前端开发者(及任何需要调用后端的人/AI)。
 > **什么时候用**:开发前端、联调、排查接口问题时。
 > **解决什么问题**:只看这一个文件,就知道怎么调用后端所有接口,不用看后端代码。
-> 最后更新:2026-06-13。业务接口 55 个 + 基础设施接口 1 个（GET /health），全部 curl 验证通过。第 15 节枚举值说明。
+> 最后更新:2026-07-24。业务接口 60 个 + 基础设施接口 1 个（GET /health），全部 curl 验证通过。第 十六 节枚举值说明。新增 十六(Workbench) 和 十七(Notifications)。后端 18 个业务模块，前端 25 个页面。
 
 ---
 
@@ -812,7 +812,142 @@
 
 ---
 
-## 十六、枚举值说明
+## 十六、Workbench 工作台接口
+
+### 16.1 GET /workbench/todos — 获取待办事项分组
+
+- **用途**：按当前用户角色返回分组待办事项（客户、办件、收费、任务、裂变、托管等）。所有认证用户可访问，但返回内容按角色不同。
+- **方法**：GET
+- **URL**：`/workbench/todos`
+- **是否需要 token**：是（所有认证用户，无 @Roles 限制）
+- **请求参数**：无（用户身份从 JWT 解析）
+- **返回示例**：
+```json
+{
+  "roleCode": "会计",
+  "generatedAt": "2026-07-24T11:00:00.000Z",
+  "todoGroups": [
+    {
+      "key": "tasks_pending_confirm",
+      "title": "待确认任务",
+      "count": 3,
+      "targetPath": "/pages/task-detail/task-detail",
+      "items": [
+        {
+          "id": 1,
+          "title": "月度报税",
+          "subtitle": "客户：某某公司",
+          "status": "待确认",
+          "priority": "normal",
+          "targetPath": "/pages/task-detail/task-detail",
+          "targetId": 1,
+          "updatedAt": "2026-07-24T00:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+- **各角色待办组**：
+
+| 角色 | 待办组 |
+|------|--------|
+| 管理员 | 待跟进客户、待处理办件、待收费、未完成任务、裂变待审批、托管待分派会计 |
+| 商务 | 待跟进客户、待收费客户、客户办件进度、托管方案待确认 |
+| 业务 | 待处理办件、进行中办件、待打卡归档 |
+| 会计 | 待确认任务、待完成任务、会计待确认分派 |
+| 主管 | 未完成任务、逾期任务、裂变待审批、裂变待归档、托管待分派会计、办件待跟进 |
+| 总务 | 待收费、经营报表提醒、工资报表提醒 |
+
+- **数据可见范围**：每条待办的 where 条件按角色限定。例如会计只能看分配给自己的任务和托管；商务只能看自己负责的客户。
+- **前端使用位置**：`src/pages/home/home.vue`（工作台首页）
+- **错误**：401 未认证
+
+---
+
+## 十七、Notifications 通知接口
+
+### 17.1 GET /notifications — 获取通知列表
+
+- **用途**：获取当前用户的通知列表（仅自己的通知）。
+- **方法**：GET
+- **URL**：`/notifications`
+- **是否需要 token**：是（所有认证用户，无 @Roles 限制）
+- **请求参数**：无（receiverId 从 JWT 的 `sub` 解析）
+- **返回示例**：
+```json
+[
+  {
+    "id": 1,
+    "type": "task",
+    "title": "新任务",
+    "body": "主管赵六 给你分配了任务：月度报税",
+    "senderId": 4,
+    "receiverId": 3,
+    "roleTarget": "会计",
+    "targetType": "task",
+    "targetId": 1,
+    "isRead": false,
+    "createdAt": "2026-07-24T10:00:00.000Z"
+  }
+]
+```
+- **限制**：默认返回最近 50 条，按 createdAt 倒序
+- **数据可见范围**：仅自己的通知（receiverId === user.sub）
+- **前端使用位置**：`src/pages/notification-list/notification-list.vue`
+- **错误**：401 未认证
+
+### 17.2 GET /notifications/unread-count — 获取未读数量
+
+- **用途**：获取当前用户的未读通知总数（用于 TabBar 角标）。
+- **方法**：GET
+- **URL**：`/notifications/unread-count`
+- **是否需要 token**：是（所有认证用户）
+- **请求参数**：无
+- **返回示例**：`{ "count": 5 }`
+- **前端使用位置**：`src/components/junce/JcMobileTabBar.vue`（底部导航角标）
+- **错误**：401 未认证
+
+### 17.3 PATCH /notifications/:id/read — 标记单条已读
+
+- **用途**：将指定通知标记为已读（仅限自己的通知）。
+- **方法**：PATCH
+- **URL**：`/notifications/:id/read`
+- **是否需要 token**：是（所有认证用户）
+- **路径参数**：`id`（通知 ID，整数）
+- **返回示例**：`{ "ok": true }`
+- **权限**：仅可标记自己收到的通知（receiverId 匹配），标记他人通知无效果
+- **前端使用位置**：`src/pages/notification-list/notification-list.vue`
+- **错误**：401 未认证
+
+### 17.4 PATCH /notifications/read-all — 全部标记已读
+
+- **用途**：将当前用户的所有未读通知一次性标记为已读。
+- **方法**：PATCH
+- **URL**：`/notifications/read-all`
+- **是否需要 token**：是（所有认证用户）
+- **请求参数**：无
+- **返回示例**：`{ "ok": true }`
+- **前端使用位置**：`src/pages/notification-list/notification-list.vue`
+- **错误**：401 未认证
+
+### 通知触发场景
+
+通知由后端各业务模块在特定操作时自动创建（通过 `NotificationsService.create` / `createForRole`）：
+
+| 触发操作 | 通知类型 | 接收人 |
+|----------|---------|--------|
+| 办件状态变更 | `work_order` | 业务对接人 |
+| 任务分配 | `task` | 任务接收人 |
+| 收费确认/催收 | `charge` | 客户主理人 |
+| 托管分派会计 | `tenant` | 被分派会计 |
+| 裂变线索确认 | `fission` | 相关角色 |
+| 系统通知 | `system` | 按角色广播 |
+
+---
+
+## 十八、枚举值说明
 
 > ⚠️ **前端必须使用后端实际接受的枚举值,一字不差,不允许自己编。** 传错值会返回 400。
 
@@ -834,7 +969,7 @@
 
 ---
 
-## 十七、curl 测试示例(已验证)
+## 十九、curl 测试示例(已验证)
 
 > 本机若开代理/VPN,localhost 请求会返回 502,所有命令已加 `--noproxy "*"`。
 
