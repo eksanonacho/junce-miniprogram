@@ -1,206 +1,283 @@
-# 开发纪律（每次开发都遵守）
+# CLAUDE.md — 君册财税内部管理小程序开发约束
 
-你是本项目的全栈开发工程师，严格按照 junce_requirements_v2.md 开发第一期 MVP。
-技术栈：uni-app (Vue3) + NestJS + Prisma + PostgreSQL。
+> 最后更新：2026-07-24
+> 适用范围：本仓库全部前端、后端、数据库、测试、文档与部署工作。
+> 本文件是仓库内唯一的 Claude Code 项目约束文档。
 
 ---
 
-## 铁律
+## 1. 项目定位
 
-每次回答前都要先输出一句"YOYO！Whatup G"
+本项目是君册财税内部管理小程序，一期定位为财税公司内部 OA、轻量 CRM 和业务流转工具。
 
-1. 只做第一期真实逻辑；经营/工资看板做"手动录入+汇总展示"，不做自动反推佣金/成本。
-2. 不要一次性生成全部代码。先出结构/计划，我确认后再逐模块开发。
-3. 每开发一个模块前，先说明：涉及哪些页面、接口、数据库表、权限。我确认再写。
-4. 金额字段一律用 Decimal，精度统一 @db.Decimal(12,2)，禁止用 float 或 Prisma 默认 Decimal(65,30)。
-   原因: (12,2) = 整数部分最多 10 位（百亿级）+ 小数部分 2 位（精确到分），符合财务规范。
-   从 Prisma schema 写 @db.Decimal(12,2)，到数据库是 numeric(12,2)，到 TypeScript 是 Prisma.Decimal。
-5. RBAC 先做基础角色隔离，细粒度权限后续补（权限表客户还没给全）。
-6. 文件上传先做本地存储或对象存储抽象层，后续可替换。
-7. 所有涉及资金、合同、发票的接口，权限必须限制为总务和管理员。
-8. 一次只做 1-2 个模块，做完我测试通过，再做下一个。
-9. 先完成后端核心链路，再做前端页面。
-10. 每完成一个模块，给出测试方法，并用大白话解释这块代码干了什么。
-11. 客户分层标准、第四步具体任务内容、完整权限表 —— 这三样客户还没给，
-    遇到需要时先留 TODO 占位，不要自己编。
-12. 每完成一个开发步骤（安装工具、搭建模块、修bug等），都要追加记录到项目根目录的 .docs 文件中。
-    .docs 是本项目的开发日志+学习手册，格式要求：
-    - 每个条目带日期标题（## YYYY-MM-DD 第N步: 做了什么）
-    - 专业术语写在前面，大白话解释跟在后面
-    - 记录踩过的坑、原因、解决方案
-    - 记录每个操作的验证命令
-    - 记录"下一步要做什么"
+核心链路：
 
-13.每次读完CLAUDR.md后输出“Saulgoodman”
+客户填单 → 服务确认 → 人员配置 → 办件流转 → 办结打卡 → 收费催收 → 托管入档 → 任务跟进 → 业务裂变 → 经营/工资看板 → 管理看板
+
+技术栈：
+
+- 正式前端：`junce-miniprogram-frontend/`
+- 前端技术：uni-app、Vue 3、Vite、Pinia，目标端为微信小程序，H5 用于辅助调试
+- 后端：`server/`
+- 后端技术：NestJS、TypeScript、Prisma、PostgreSQL、JWT
+- 部署：Docker Compose、Nginx
+
+根目录旧 `client/` 是早期前端骨架，不是当前正式前端。除非项目负责人明确要求，不要在 `client/` 继续开发。
+
+AI 财税初诊网站是独立项目，不得把两个项目的前端、后端、数据库或接口直接合并。
+
 ---
 
-## docs 项目记忆层使用规则
+## 2. 当前项目状态
 
-### 1. 每次开发前必须读取的文件
+当前基线提交：
 
-每次开始新模块、新功能、修 bug、改接口、改数据库、联调前，都必须先阅读并参考：
+- 远程同步基线：`31af7e1`
+- 后端原封板基线：`96ccf7e`
+- 远程新增：权限服务、角色工作台、通知系统、完整正式前端
 
-- docs/README.md（项目总览，第一次必读）
-- docs/junce_requirements_v2.md
-- docs/PROJECT_CONTEXT.md
-- docs/PROJECT_STATE_SNAPSHOT.md
-- docs/ROADMAP.md
-- docs/API_CONTRACT.md
-- docs/DATABASE_GUIDE.md
-- docs/SYSTEM_ARCHITECTURE.md
-- docs/TESTING_GUIDE.md
-- docs/TEST_RESULTS.md
-- docs/RISK_ANALYSIS.md
-- docs/CTO_NOTES.md
+当前代码覆盖：
 
-如果本次任务涉及前端或前后端联调，还必须读取：
+- 后端一期核心业务模块已实现
+- 正式前端 Phase 1–9 已编码
+- 正式前端包含登录、客户、服务配置、人员配置、办件、收费、托管、任务、裂变、手动看板、管理看板和通知页面
+- 前端交接文档声称 55/55 业务接口完成联调
+- 历史后端记录为 63/63 回归和 21/21 Docker 冒烟通过
 
-- docs/FRONTEND_HANDOFF.md
+2026-07-24 接手复核的实际结果：
 
-如果本次任务涉及部署、服务器、Docker、环境变量、上线，还必须读取：
+- `pnpm exec prisma validate`：通过
+- `pnpm exec prisma generate`：通过
+- `pnpm build`：重新生成 Prisma Client 后通过
+- 后端单元测试：1/1 通过
+- Jest 能发现 3 个 E2E 测试文件
+- E2E 本轮未运行，因为需要明确的测试数据库且测试会写入数据
+- 前端 `npm ci` 失败：`package.json` 与 `package-lock.json` 不同步
+- 因依赖未能完成干净安装，H5 和 mp-weixin 构建本轮未能复现
+- Prisma Schema 已有 `Notification` 模型，但 migrations 中没有对应通知表迁移
+- 微信开发者工具完整回归、真机测试、审核发布和生产部署尚未验证
 
-- docs/DEPLOYMENT_GUIDE.md
+因此，不得把“历史文档声称完成”写成“当前环境已重新验证”。修复前端 lockfile、补齐通知 migration 并完成双端/数据库验证，是当前最高优先级。
 
-### 2. 每个文件的用途
+---
 
-| 文件 | 用途 |
-|------|------|
-| README.md | 项目总览/入口文档，技术栈、已完成模块、接口清单、数据库、测试账号、快速开始、文档索引 |
-| junce_requirements_v2.md | 第一期需求边界，哪些真做、哪些二期不做，最高需求依据 |
-| PROJECT_CONTEXT.md | 项目背景、客户情况、商务条款、一期/二期边界、技术栈、已完成内容 |
-| PROJECT_STATE_SNAPSHOT.md | 当前项目进度快照，必须保持最新 |
-| ROADMAP.md | 模块开发顺序和依赖关系，决定下一步先做什么 |
-| API_CONTRACT.md | 前后端接口契约。新增或修改后端接口后必须同步更新 |
-| DATABASE_GUIDE.md | 数据库表、枚举、关系、migration 规则。涉及数据库前必须阅读 |
-| SYSTEM_ARCHITECTURE.md | 整体架构、前后端分层、请求链路、模块关系 |
-| TESTING_GUIDE.md | 测试命令、回归测试、已知测试坑。每次改完代码必须参考 |
-| TEST_RESULTS.md | 测试结果记录。每个模块完成后记录 curl 测试结果（正向+反向），全部通过才算验收 |
-| RISK_ANALYSIS.md | 项目风险、范围风险、权限风险、数据风险。开发前必须检查是否触发风险 |
-| CTO_NOTES.md | 技术负责人提醒、不能乱改的地方、已知技术债、产品风险 |
-| FRONTEND_HANDOFF.md | 给前端同学的交接说明。涉及前端页面或联调时必须同步 |
-| DEPLOYMENT_GUIDE.md | 部署、服务器、Docker、环境变量、备份、上线 checklist |
+## 3. 需求硬边界
 
-### 3. 固定开发流程
+一期只做真实 MVP。
 
-每次开发模块必须按以下流程：
+禁止自行增加：
 
-1. 先阅读 CLAUDE.md、junce_requirements_v2.md 和 docs/ 下相关文档。
-2. 先输出 plan，不要直接写代码。
-3. plan 必须包含：
-   - 本模块目标
-   - 依赖的客户资料是否齐全
-   - 缺失资料如何 TODO，占位，不编造规则
-   - 涉及哪些数据库表
-   - 是否需要新增或修改 Prisma migration
-   - 是否影响已有数据
-   - 涉及哪些接口
-   - 涉及哪些权限
-   - 是否涉及金额、资金、合同、发票
-   - 是否影响前端
-   - curl 正向和反向验证方案
-   - 需要同步更新哪些 docs 文件
-4. 我确认 plan 后，才能写代码。
-5. 写完后必须 pnpm build 通过。
-6. 必须给出 curl 测试命令。
-7. curl 测试必须包含：
-   - 正向测试：该成功的请求必须成功
-   - 反向测试：未登录、越权、角色不符必须被 401/403 拦截
-8. 我测试通过后，再更新相关文档。
-9. 每次结束必须告诉我：
-   - 本次完成了什么
-   - 验证了什么
-   - 修改了哪些文件
-   - 更新了哪些 docs（必须含 TEST_RESULTS.md）
-   - 下一步建议做什么
+- 自动反推佣金、成本或工资
+- 自动建企业微信群
+- AI 自动判断业务结果
+- 客户分层自动规则
+- 未经客户确认的细粒度权限
+- 第二期复杂自动化
+- 虚构字段、虚构接口、假数据或假统计
 
-### 4. docs 更新规则
+经营看板和工资看板一期只允许“手动录入 + 后端汇总展示”。
 
-每次完成模块后，必须根据实际影响更新 docs：
+以下资料仍缺失时，只能保留 TODO，不得编造：
 
-- API 有新增/修改：更新 docs/API_CONTRACT.md
-- 数据库有新增/修改：更新 docs/DATABASE_GUIDE.md
-- 进度变化：更新 docs/PROJECT_STATE_SNAPSHOT.md，并同步更新顶部快照日期
-- 路线图状态变化：更新 docs/ROADMAP.md
-- 测试命令变化：更新 docs/TESTING_GUIDE.md
-- **每次模块 curl 验证完成后：必须更新 docs/TEST_RESULTS.md**，记录每个测试项的名称、预期、结果（✅/❌）
-- 架构变化：更新 docs/SYSTEM_ARCHITECTURE.md
-- 前端联调变化：更新 docs/FRONTEND_HANDOFF.md
-- 风险、技术债、关键坑变化：更新 docs/RISK_ANALYSIS.md 和 docs/CTO_NOTES.md
-- 部署相关变化：更新 docs/DEPLOYMENT_GUIDE.md
-- **项目全局变化（模块增删、接口增删、表增删、状态变化）：必须同步更新 docs/README.md 中对应的章节**（已完成模块表、接口清单、数据库表、快速开始、下一步等）
-- 每个开发步骤还必须追加记录到项目根目录 .docs
+- 客户分层标准
+- 第四步具体任务内容
+- 完整角色权限表
 
-### 5. 当前项目硬边界
+---
 
-必须牢记：
+## 4. 开发前必读
 
-- 当前主线是内部管理小程序。
-- AI 财税合规初诊系统暂缓，等客户给九维度规则、案例、品牌资料后再启动。
-- 第一期只做真实 MVP，不做第二期复杂自动化。
-- 经营看板、工资看板一期只做"手动录入 + 自动汇总展示"，不做自动反推佣金/成本。
-- 建企业 V 群是客户手动建，系统不自动建群、不管群。
-- 客户分层标准、第四步具体任务内容、完整权限表仍待客户补充，缺失时只能 TODO，不允许编造。
-- 所有金额字段必须使用 Decimal(12,2)，禁止 float，禁止 Prisma 默认 Decimal(65,30)。
-- 涉及资金、合同、发票的接口权限必须限制为总务 + 管理员。
-- Prisma schema 中 moduleFormat = "cjs" 不能删除，否则会重现 Prisma 7 + NestJS 的 ESM/CJS 启动错误。
-- ownerId 必须从 JWT token 获取，不能让前端传，防止客户归属被篡改。
-- 每个模块必须小步开发，做完验证，再进入下一个模块。
+每次开始任务，先读：
 
-### 6. 当前已完成状态
+1. 本文件
+2. `docs/README.md`
+3. `docs/junce_requirements_v2.md`
+4. `docs/PROJECT_CONTEXT.md`
+5. `docs/PROJECT_STATE_SNAPSHOT.md`
+6. `docs/ROADMAP.md`
+7. `docs/API_CONTRACT.md`
+8. `docs/DATABASE_GUIDE.md`
+9. `docs/SYSTEM_ARCHITECTURE.md`
+10. `docs/TESTING_GUIDE.md`
+11. `docs/TEST_RESULTS.md`
+12. `docs/RISK_ANALYSIS.md`
+13. `docs/CTO_NOTES.md`
 
-已完成并 curl 验证通过：
+涉及正式前端时还要读：
 
-- 环境搭建 / 项目骨架 / PostgreSQL + Prisma
-- roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments 表
-- Auth 登录 + JWT + RBAC 双守卫
-- Customers 后端 CRUD 接口
-- ServiceTemplates + ReadConfirmation 后端接口
-- ServiceItems + StaffAssignment 后端接口
-- Users 查询接口（GET /users?roleCode=X）
-- WorkOrder 办件流转 / 办结打卡后端接口
-- Charge 费用管控 + 催收后端接口（首次 @Roles 实战）
-- TenantRegister 托管入档后端接口（仅代理户，会计本人校验）
-- Task 任务框架后端接口（通用任务流转，本人/管理员校验）
-- Dashboard 看板接口（5 统计接口，0 新表，纯聚合查询）
-- Files 文件上传接口（multer 本地存储 + 静态访问，0 新表）
-- Fission 业务裂变接口（裂变填单+确认+归档，@Roles 主管+管理员）
-- ManualDashboard 手动看板接口（经营/工资录入+汇总，@Roles 总务+管理员）
+- `junce-miniprogram-frontend/docs/PROJECT_STATUS.md`
+- `junce-miniprogram-frontend/docs/FRONTEND_ARCHITECTURE.md`
+- `junce-miniprogram-frontend/docs/DEBUG_NOTES.md`
+- `junce-miniprogram-frontend/docs/TESTING_GUIDE.md`
+- 根目录 `docs/FRONTEND_HANDOFF.md`
 
-当前前端同学负责：
+涉及部署时还要读：
 
-- 登录页 / 客户填单页 / 客户列表页 / 客户详情编辑页
+- `docs/DEPLOYMENT_GUIDE.md`
 
-当前后端下一步按 ROADMAP.md 推进，优先考虑：
+文档可能过期。发生冲突时，以需求边界、当前代码、实际构建和测试证据为准，并同步修正文档。
 
-- Fission 裂变简化版
-- 经营/工资看板（手动录入）
+---
 
-### 7. 遇到报错的处理规则
+## 5. 固定工作流程
+
+开始改动前先输出计划，至少说明：
+
+- 目标与范围
+- 涉及的页面、接口、数据库表和权限
+- 是否涉及金额、合同、发票或客户数据
+- 是否需要 Prisma migration
+- 是否影响已有数据或 API 契约
+- 正向、反向和回归验证方案
+- 需要更新的文档
+
+未经项目负责人确认，不要一次性开发多个大模块。
+
+每次只处理 1–2 个模块或一个清晰问题。先理解现有实现，再做最小范围修改。
 
 遇到报错时：
 
-1. 先贴完整报错原文。
-2. 不要凭空猜测。
-3. 先查 docs/CTO_NOTES.md 和 docs/TESTING_GUIDE.md 是否已有类似已知坑。
-4. 再分析原因。
-5. 修复后必须说明：
-   - 根因是什么
-   - 改了哪些文件
-   - 为什么这样改
-   - 怎么验证修好了
+1. 保留完整错误原文
+2. 查 `docs/CTO_NOTES.md`、`docs/TESTING_GUIDE.md` 和前端 `DEBUG_NOTES.md`
+3. 用代码和可复现步骤定位根因
+4. 修复后说明根因、改动、影响和验证结果
 
-### 8. 最终目标
+不得用“历史上通过”“同事说通过”替代当前验证。
 
-这些 docs 是本项目的"项目记忆层"。
+---
 
-以后即使换 agent、换大模型、换对话，只要读取 CLAUDE.md + docs/，就必须能马上知道：
+## 6. 后端与数据库铁律
 
-- 项目是什么
-- 当前做到哪
-- 哪些已经验证
-- 哪些不能乱改
-- 下一步该做什么
-- 哪些资料缺失
-- 哪些风险要避开
-- 前后端如何联调
-- 数据库和接口如何演进
+- 金额字段统一使用 `Decimal` 和 `@db.Decimal(12,2)`
+- 禁止用 `float` 或 Prisma 默认 `Decimal(65,30)` 保存财务金额
+- `ownerId` 必须从 JWT 获取，禁止由前端传入
+- 资金、合同、发票相关写接口必须由后端执行角色权限校验
+- 前端显隐不是权限控制，后端是最终权限裁决方
+- Prisma Schema 变化必须配套 migration，不能只改 `schema.prisma`
+- 新 migration 必须评估已有数据、回滚风险和部署顺序
+- `generator client` 的 `moduleFormat = "cjs"` 不得删除
+- 文件上传必须经过现有存储抽象和安全校验，不暴露服务器内部路径
+- 不得在 Git 中提交真实密钥、真实客户数据或生产凭据
+
+后端改动后至少执行：
+
+```bash
+cd server
+pnpm exec prisma validate
+pnpm exec prisma generate
+pnpm build
+pnpm exec jest --runInBand
+```
+
+涉及接口、权限或数据库时，还必须在隔离测试数据库中运行相关 E2E 和正反向接口测试。
+
+---
+
+## 7. 正式前端铁律
+
+正式前端目录是 `junce-miniprogram-frontend/`。
+
+必须保持：
+
+- API 路径、请求参数和返回结构与 `docs/API_CONTRACT.md` 一致
+- token 存储、401/403 处理和角色权限逻辑一致
+- POST/PATCH body 不添加后端不存在的字段
+- PATCH 只提交允许且确实需要修改的字段
+- 金额展示与提交语义不变
+- 微信小程序端可编译，不只验证 H5
+- loading、empty、error、无权限和提交中状态真实可用
+
+禁止：
+
+- 伪造接口数据或统计
+- 为了视觉效果修改业务状态含义
+- 使用中文 CSS class
+- 盲目批量替换或用脚本注入 CSS
+- 引入新 UI 框架而不先说明影响
+- 把 H5 效果等同于微信小程序真实效果
+
+前端改动后至少执行：
+
+```bash
+cd junce-miniprogram-frontend
+npm ci
+npm run build:h5
+npm run build:mp-weixin
+```
+
+`npm ci` 必须能在干净环境成功。禁止只依赖开发者电脑中残留的 `node_modules`。
+
+最终 UI 验收应在微信开发者工具中完成；关键流程还应进行真机测试。
+
+---
+
+## 8. 安全与环境配置
+
+- `.env`、本地设置、真实 token、数据库密码不得提交
+- `.env.example` 只能放示例值
+- 前端 `BASE_URL` 不得长期绑定某位开发者的局域网 IP
+- 开发、测试、生产地址必须明确区分
+- 测试不得直接使用生产数据库
+- E2E 会写入数据，运行前必须确认数据库用途和清理策略
+- 上传目录、构建产物、日志和依赖目录不得误提交
+
+当前仓库已跟踪以下本地性质文件，后续应单独审查是否保留：
+
+- `junce-miniprogram-frontend/.claude/settings.local.json`
+- `junce-miniprogram-frontend/.impeccable/config.local.json`
+
+不要在未检查内容和用途前直接删除或继续扩散。
+
+---
+
+## 9. 文档同步
+
+代码行为发生变化时必须同步：
+
+- API：`docs/API_CONTRACT.md`
+- 数据库：`docs/DATABASE_GUIDE.md`
+- 架构：`docs/SYSTEM_ARCHITECTURE.md`
+- 前端联调：`docs/FRONTEND_HANDOFF.md`
+- 测试方法：`docs/TESTING_GUIDE.md`
+- 测试结果：`docs/TEST_RESULTS.md`
+- 风险和技术债：`docs/RISK_ANALYSIS.md`、`docs/CTO_NOTES.md`
+- 部署：`docs/DEPLOYMENT_GUIDE.md`
+- 当前状态：`docs/PROJECT_STATE_SNAPSHOT.md`
+- 总览：`docs/README.md`
+- 开发过程：根目录 `.docs`
+
+前端目录内的历史交接文档可以保留作为记录，但项目约束只以根目录本文件为准，不再创建其他 `CLAUDE.md`。
+
+---
+
+## 10. Git 规则
+
+- 开始前检查 `git status`
+- 保留项目负责人和其他开发者的未提交修改
+- 不使用 `git reset --hard`、强制推送或覆盖式 checkout
+- 一个提交只表达一个清晰目的
+- 提交前检查 `git diff`、构建和测试结果
+- 未通过的检查必须如实记录
+- 未经明确授权，不直接 push
+
+每次结束说明：
+
+- 完成了什么
+- 修改了哪些文件
+- 运行了哪些验证
+- 哪些验证通过、失败或未运行
+- 剩余风险
+- 下一步建议
+
+---
+
+## 11. 当前接手优先级
+
+1. 修复正式前端 `package.json` / `package-lock.json` 不一致，恢复干净安装
+2. 补齐 `Notification` 对应 Prisma migration，并验证现有数据库升级
+3. 运行后端完整 E2E 和角色权限回归
+4. 重新执行 H5、mp-weixin 双构建
+5. 在微信开发者工具完成全页面、多角色、主要业务闭环验收
+6. 真机测试网络、上传、登录态、导航和样式降级
+7. 清理过期状态文档、重复旧前端和仓库内本地工具配置
+8. 完成 staging 部署演练后，再讨论生产发布

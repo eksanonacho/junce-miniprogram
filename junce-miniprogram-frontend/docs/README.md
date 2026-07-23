@@ -34,7 +34,7 @@ juncai-app/
 ├── API_CONTRACT.md             # 接口契约（最高优先级）
 ├── PROJECT_PLAN.md             # 项目计划与铁律
 ├── FRONTEND_HANDOFF.md         # 前端交接文档
-├── CLAUDE.md                   # AI 助手指令
+├── ../CLAUDE.md                # 仓库根目录唯一的 AI 助手指令
 └── src/
     ├── main.js                 # 入口文件：挂载 Vue + Pinia
     ├── App.vue                 # 根组件
@@ -88,7 +88,7 @@ npm run build:mp-weixin
 ## 6. Claude Code 工作流
 
 每次开始任务前，必须先阅读：
-- `CLAUDE.md`
+- `../../CLAUDE.md`
 - `PROJECT_PLAN.md`
 - `API_CONTRACT.md`
 - `FRONTEND_HANDOFF.md`

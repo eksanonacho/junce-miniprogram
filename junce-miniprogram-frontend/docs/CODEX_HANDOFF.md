@@ -38,7 +38,7 @@
 
 | # | 文件 | 内容 |
 |---|---|---|
-| 1 | `CLAUDE.md` | 项目铁律、开发流程、禁止事项 |
+| 1 | `../../CLAUDE.md` | 仓库唯一的项目铁律、开发流程、禁止事项 |
 | 2 | `docs/PROJECT_STATUS.md` | 当前项目进度、接口完成情况、阶段状态 |
 | 3 | `docs/FRONTEND_ARCHITECTURE.md` | 前端目录结构、request 封装、页面组织 |
 | 4 | `docs/PAGE_ROADMAP.md` | 页面清单、优化路线、Future Task |
