@@ -50,6 +50,8 @@
 - **Docker 状态**：build ✅ / up ✅ / seed ✅ / 冒烟 21/21 ✅ / GET /health ✅
 - **接口统计**：业务接口 60 个 + 基础设施接口 1 个（GET /health）
 - **后端模块**：18 个（含 Workbench、Notifications）
+- **未测项**：微信开发者工具全页面多角色回归、真机测试、小程序 backdrop-filter 样式降级验收
+- **已知限制**：小程序端 glass-morphism blur 不生效，卡片降级为半透明白底；登录页暂未跟随钛银配色
 
 ---
 

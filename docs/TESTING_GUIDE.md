@@ -3,7 +3,7 @@
 > **这个文件是给谁看的**:任何改完代码、要确认没改坏系统的人(或 AI)。
 > **什么时候用**:每次改代码后做回归测试;新模块开发完做验证;排查"是不是哪里坏了"。
 > **解决什么问题**:照着跑一遍,快速确认核心功能(登录/权限/客户)还正常。
-> 最后更新:2026-06-24。所有 curl 命令均已实测通过。
+> 最后更新:2026-07-24。所有 curl 命令均已实测通过。新增 E2E 测试（第十一节）。
 
 ---
 
@@ -667,3 +667,61 @@ curl -s --noproxy "*" -X POST http://localhost:3000/manual-dashboard/business-re
 | Decimal 字段格式不对 | 金额返回成奇怪字符串、或精度异常 | 确认字段是 Decimal(12,2);后端 Service 应做 Decimal→数字序列化 |
 | python json.tool 报错 | `Expecting value: line 1 column 1` | 多行命令要整条一起执行;或去掉 `\| python3 -m json.tool` 看原始返回 |
 | 中文显示成 \uXXXX | 原始 JSON 里中文是编码 | 正常现象,解析后即中文;想直接看中文可去掉 json.tool |
+
+---
+
+## 十一、E2E 测试（隔离数据库）
+
+E2E 测试会写入数据，**绝不**在生产库或开发主库上运行。必须使用独立的测试数据库。
+
+### 11.1 创建隔离测试库
+
+```bash
+createdb -U <用户名> -h localhost junce_migration_test
+```
+
+### 11.2 完整验证流程
+
+```bash
+cd server
+
+# 1. 验证 Schema
+pnpm exec prisma validate
+
+# 2. 生成 Prisma Client
+pnpm exec prisma generate
+
+# 3. 从零部署全部 migration（会创建所有表）
+DATABASE_URL=postgresql://<用户>@localhost:5432/junce_migration_test \
+  npx prisma migrate deploy
+
+# 4. 写入种子数据（测试账号、服务模板）
+DATABASE_URL=postgresql://<用户>@localhost:5432/junce_migration_test \
+  npx tsx ./prisma/seed.ts
+
+# 5. 运行 E2E
+DATABASE_URL=postgresql://<用户>@localhost:5432/junce_migration_test \
+  npm run test:e2e
+```
+
+### 11.3 预期结果
+
+| 套件 | 测试数 | 说明 |
+|------|:--:|------|
+| app.e2e-spec | 1 | 基础应用冒烟 |
+| permissions.e2e-spec | 10 | 6 角色权限 + 越权拦截（401/403） |
+| workbench.e2e-spec | 5 | 各角色工作台待办分组 |
+
+### 11.4 注意事项
+
+- **必须先 seed**：测试账号（shangwu/yewu/kuaiji/zhuguan/zongwu/admin）来自 seed.ts，不 seed 会导致全部 401
+- **E2E 写入数据后不自动清理**：测试完成后 `dropdb junce_migration_test` 即可
+- **迁移验证顺序不能乱**：migrate deploy → seed → test:e2e
+- **不要用 prisma db push**：这会绕过 migration 历史，导致 migrate status 不一致
+- **当前 E2E 未覆盖**：Notifications 模块、文件上传端到端
+
+### 11.5 清理
+
+```bash
+dropdb -U <用户名> -h localhost junce_migration_test
+```

@@ -3,13 +3,13 @@
 > **这个文件是给谁看的**:任何要碰数据库的开发者(或 AI)。
 > **什么时候用**:理解现有表结构、新建表、改字段、排查数据问题前。
 > **解决什么问题**:看懂数据库目前怎么设计、哪些表已完成、哪些后续要加、改库的规矩是什么。
-> 最后更新:2026-06-24。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。
+> 最后更新:2026-07-24。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。11 个 migration，17 张表（含 notifications）。
 
 ---
 
 ## 一、当前已实现表
 
-目前数据库共 17 张表:15 张业务表(roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders)+ 1 张 Prisma 系统表(_prisma_migrations) + 1 张枚举表(PgEnum 自动维护)。
+目前数据库共 17 张表：16 张业务表（roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders / tenant_registers / tasks / fission_leads / manual_business_reports / manual_salary_reports / notifications）+ 1 张 Prisma 系统表（_prisma_migrations）。
 
 ### 1.1 roles — 角色主数据表
 - **用途**:存系统的 6 种岗位角色,是权限体系的基础。
@@ -241,6 +241,26 @@ Files 模块不新增数据库表。文件通过 multer 写入本地磁盘 `serv
 - **权限**：PATCH/confirm/archive/mark-invalid 限主管+管理员(@Roles)
 - **状态流转**：PATCH 禁改 status，必须通过 confirm/archive/mark-invalid 接口
 
+### 1.15 notifications — 通知消息表
+
+- **用途**：系统通知中心，各业务模块在关键操作时自动创建通知（办件状态变更、任务分配、收费确认/催收、托管分派会计、裂变线索确认等）。
+- **主键**：id
+- **关键字段**：
+  - `type`：通知类型（work_order / task / charge / tenant / fission / system）
+  - `title`：通知标题
+  - `body`：通知正文
+  - `senderId`：发送人，外键→users（可空，系统通知无发送人）
+  - `receiverId`：接收人，外键→users（必填）
+  - `roleTarget`：按角色广播时的目标角色（可空）
+  - `targetType`：关联的业务对象类型（task / work_order / charge 等）
+  - `targetId`：关联的业务对象 ID
+  - `isRead`：是否已读，默认 false
+- **外键**：senderId→users，receiverId→users
+- **索引**：(receiverId, isRead) 用于未读查询；(receiverId, createdAt) 用于列表排序
+- **migration**：20260724030925_add_notifications（2026-07-24 补齐，最初通过 prisma db push 创建）
+- **关联接口**：GET /notifications、GET /notifications/unread-count、PATCH /notifications/:id/read、PATCH /notifications/read-all
+- **权限**：仅限认证用户，数据按 receiverId 隔离
+
 ---
 
 ## 二、表关系
@@ -297,7 +317,7 @@ RoleCode(枚举)
 
 ---
 
-## 五、后续计划表(根据 PRD 规划,尚未创建)
+## 五、已全部实现（原"后续计划表"）
 
 > 以下表在开发到对应模块时再用 Prisma migration 创建,不要一次性全建。
 
