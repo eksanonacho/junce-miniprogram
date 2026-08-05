@@ -109,8 +109,8 @@ function onDeadlineChange(e) { form.value.deadline = e.detail.value }
 const roleCode = computed(() => userStore.user?.roleCode || '')
 const currentUserId = computed(() => userStore.user?.id)
 const canEdit = computed(() => roleCode.value === '主管' || roleCode.value === '管理员')
-const canConfirm = computed(() => task.value?.status === '待确认' && (currentUserId.value === task.value?.toUserId || roleCode.value === '管理员' || roleCode.value === '主管'))
-const canComplete = computed(() => task.value?.status === '进行中' && (currentUserId.value === task.value?.toUserId || roleCode.value === '管理员' || roleCode.value === '主管'))
+const canConfirm = computed(() => task.value?.status === '待确认' && (currentUserId.value === task.value?.toUserId || roleCode.value === '管理员'))
+const canComplete = computed(() => task.value?.status === '进行中' && (currentUserId.value === task.value?.toUserId || roleCode.value === '管理员'))
 
 // ========== 数据加载 ==========
 onLoad((options) => {

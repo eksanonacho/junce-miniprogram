@@ -112,6 +112,20 @@
 
         <JcCard class="panel-card" padding="md">
           <view class="panel-title-row">
+            <text class="panel-title">会计服务看板</text>
+            <text v-if="accountingError" class="retry-link" @tap="fetchAccounting">重试</text>
+          </view>
+          <JcLoading v-if="accountingLoading" type="compact" :count="1" />
+          <view v-else class="stat-list">
+            <view class="stat-row"><text class="sl">本月登记</text><text class="sv">{{ safeNumber(accounting?.thisMonth) }}</text></view>
+            <view class="stat-row"><text class="sl">待复核</text><text class="sv overdue">{{ safeNumber(accounting?.pendingReview) }}</text></view>
+            <view class="stat-row"><text class="sl">已复核</text><text class="sv">{{ safeNumber(accounting?.reviewed) }}</text></view>
+            <view class="stat-row"><text class="sl">本月类型</text><text class="sv">{{ formatObj(accounting?.byType) }}</text></view>
+          </view>
+        </JcCard>
+
+        <JcCard class="panel-card" padding="md">
+          <view class="panel-title-row">
             <text class="panel-title">服务看板</text>
             <text v-if="servicesError" class="retry-link" @tap="fetchServices">重试</text>
           </view>
@@ -202,10 +216,11 @@ const customers = ref(null); const customersLoading = ref(false); const customer
 const services = ref(null); const servicesLoading = ref(false); const servicesError = ref(false)
 const tasks = ref(null); const tasksLoading = ref(false); const tasksError = ref(false)
 const charges = ref(null); const chargesLoading = ref(false); const chargesError = ref(false)
+const accounting = ref(null); const accountingLoading = ref(false); const accountingError = ref(false)
 const activeMode = ref('overview')
 let initialized = false
 
-function loadAll() { fetchOverview(); fetchCustomers(); fetchServices(); fetchTasks(); fetchCharges() }
+function loadAll() { fetchOverview(); fetchCustomers(); fetchServices(); fetchTasks(); fetchCharges(); fetchAccounting() }
 
 onShow(() => {
   if (!canView.value) return
@@ -217,6 +232,7 @@ async function fetchCustomers() { customersLoading.value = true; customersError.
 async function fetchServices() { servicesLoading.value = true; servicesError.value = false; try { services.value = await get('/dashboard/services') } catch (e) { servicesError.value = true } finally { servicesLoading.value = false } }
 async function fetchTasks() { tasksLoading.value = true; tasksError.value = false; try { tasks.value = await get('/dashboard/tasks') } catch (e) { tasksError.value = true } finally { tasksLoading.value = false } }
 async function fetchCharges() { chargesLoading.value = true; chargesError.value = false; try { charges.value = await get('/dashboard/charges') } catch (e) { chargesError.value = true } finally { chargesLoading.value = false } }
+async function fetchAccounting() { accountingLoading.value = true; accountingError.value = false; try { accounting.value = await get('/dashboard/accounting') } catch (e) { accountingError.value = true } finally { accountingLoading.value = false } }
 
 function safeNumber(v) { if (v == null || isNaN(Number(v))) return 0; return Number(v) }
 function formatMoney(v) { const n = safeNumber(v); return '¥' + n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }

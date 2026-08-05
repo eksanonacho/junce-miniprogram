@@ -51,6 +51,15 @@ export class ChargesService {
       data: dto,
       include: this.includes(),
     });
+    await this.prisma.$transaction([
+      this.prisma.customer.update({
+        where: { id: dto.customerId },
+        data: { intakeSubmittedAt: null },
+      }),
+      this.prisma.intakeAssignmentConfirmation.deleteMany({
+        where: { customerId: dto.customerId },
+      }),
+    ]);
 
     // 通知全部总务
     this.notifications.createForRole({
@@ -93,12 +102,27 @@ export class ChargesService {
 
   // 修改（不允许改 chargeStatus/confirmedBy/confirmedAt）
   async update(id: number, dto: UpdateChargeDto) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+    if (
+      existing.chargeStatus === '已收' &&
+      (dto.amount !== undefined || dto.chargeMode !== undefined)
+    ) {
+      throw new BadRequestException('已确认收款后不能修改收费方式或金额');
+    }
     const updated = await this.prisma.charge.update({
       where: { id },
       data: dto,
       include: this.includes(),
     });
+    await this.prisma.$transaction([
+      this.prisma.customer.update({
+        where: { id: existing.customer.id },
+        data: { intakeSubmittedAt: null },
+      }),
+      this.prisma.intakeAssignmentConfirmation.deleteMany({
+        where: { customerId: existing.customer.id },
+      }),
+    ]);
     return { ...updated, amount: Number(updated.amount.toString()) };
   }
 
@@ -168,8 +192,8 @@ export class ChargesService {
   }
 
   // 查催收记录
-  async findReminders(chargeId: number) {
-    await this.findOne(chargeId);
+  async findReminders(chargeId: number, user: AuthUser) {
+    await this.findOne(chargeId, user);
     return this.prisma.collectionReminder.findMany({
       where: { chargeId },
       include: {

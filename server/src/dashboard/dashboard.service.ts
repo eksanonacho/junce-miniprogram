@@ -7,15 +7,16 @@ export class DashboardService {
 
   // 老板总览
   async overview() {
-    const [customers, serviceItems, workOrders, tasks, charges] = await Promise.all([
+    const [customers, serviceItems, workOrders, tasks, charges, accounting] = await Promise.all([
       this.customersOverview(),
       this.serviceItemsOverview(),
       this.workOrdersOverview(),
       this.tasksOverview(),
       this.chargesOverview(),
+      this.accounting(),
     ]);
 
-    return { customers, serviceItems, workOrders, tasks, charges };
+    return { customers, serviceItems, workOrders, tasks, charges, accounting };
   }
 
   // 客户看板
@@ -86,6 +87,31 @@ export class DashboardService {
     const unpaidAmount = Number(unpaidSum._sum.amount?.toString() ?? '0');
 
     return { total, collectedCount, unpaidCount, collectedAmount, unpaidAmount, reminderCount };
+  }
+
+  async accounting() {
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const [total, thisMonth, pendingReview, reviewed, byTypeRows] = await Promise.all([
+      this.prisma.accountingWorkLog.count(),
+      this.prisma.accountingWorkLog.count({ where: { recordDate: { gte: monthStart } } }),
+      this.prisma.accountingWorkLog.count({ where: { reviewedAt: null } }),
+      this.prisma.accountingWorkLog.count({ where: { reviewedAt: { not: null } } }),
+      this.prisma.accountingWorkLog.groupBy({
+        by: ['recordType'],
+        _count: { id: true },
+        where: { recordDate: { gte: monthStart } },
+      }),
+    ]);
+    return {
+      total,
+      thisMonth,
+      pendingReview,
+      reviewed,
+      byType: Object.fromEntries(
+        byTypeRows.map((row) => [row.recordType, row._count.id]),
+      ),
+    };
   }
 
   // ========== helpers ==========

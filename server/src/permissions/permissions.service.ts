@@ -82,6 +82,13 @@ export class PermissionService {
     return this.isAdmin(user) || (user.roleCode === '商务' && customer.ownerId === user.sub);
   }
 
+  canCreateWorkOrder(user: AuthUser, customer: { ownerId: number }) {
+    return (
+      this.isAdminOrSupervisor(user) ||
+      (user.roleCode === '商务' && customer.ownerId === user.sub)
+    );
+  }
+
   canUpdateServiceStatus(user: AuthUser, item: { customer?: any; workOrder?: any }) {
     if (this.isAdminOrSupervisor(user)) return true;
     if (user.roleCode !== '业务') return false;
@@ -105,6 +112,7 @@ export class PermissionService {
     if (user.roleCode === '会计') {
       return {
         OR: [
+          { handlerId: user.sub },
           { customer: { staffAssignment: { is: { accountantId: user.sub } } } },
           { customer: { tenantRegister: { is: { assignedAccountantId: user.sub } } } },
         ],
@@ -115,6 +123,7 @@ export class PermissionService {
 
   canReadWorkOrder(user: AuthUser, order: { handlerId?: number | null; customer?: any }) {
     if (this.isAdminOrSupervisor(user)) return true;
+    if (order.handlerId === user.sub) return true;
     if (user.roleCode === '商务') return order.customer?.ownerId === user.sub;
     if (user.roleCode === '业务') {
       return order.handlerId === user.sub || order.customer?.staffAssignment?.businessStaffId === user.sub;
@@ -129,7 +138,7 @@ export class PermissionService {
   }
 
   canOperateWorkOrder(user: AuthUser, order: { handlerId?: number | null }) {
-    return this.isAdminOrSupervisor(user) || (user.roleCode === '业务' && order.handlerId === user.sub);
+    return this.isAdminOrSupervisor(user) || order.handlerId === user.sub;
   }
 
   chargeVisibleWhere(user: AuthUser): Prisma.ChargeWhereInput {

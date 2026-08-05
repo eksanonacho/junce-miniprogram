@@ -34,4 +34,9 @@ export class DashboardController {
   charges() {
     return this.dashboardService.charges();
   }
+
+  @Get('accounting')
+  accounting() {
+    return this.dashboardService.accounting();
+  }
 }

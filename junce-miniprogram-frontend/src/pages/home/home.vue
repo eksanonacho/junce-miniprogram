@@ -222,6 +222,7 @@ const WORKBENCH_BY_ROLE = {
       action('收', '客户收费', '查看自己客户收费与合同发票', 'pages/charge-unpaid-list/charge-unpaid-list'),
     ],
     manageActions: [
+      action('计', '会计服务进度', '查看自己客户的会计日常登记', 'pages/accounting-work-log/accounting-work-log'),
       action('裂', '业务裂变', '提交或跟进客户推荐线索', 'pages/fission-list/fission-list'),
       action('任', '任务列表', '查看与自己相关的协作任务', 'pages/task-list/task-list'),
     ],
@@ -242,10 +243,11 @@ const WORKBENCH_BY_ROLE = {
     ],
   },
   '会计': {
-    title: '会计任务台账',
-    subtitle: '通过任务、托管客户和办件进度跟进当前会计工作，独立台账二期补齐。',
+    title: '会计工作台',
+    subtitle: '集中处理主管任务、托管客户、会计办件和日常登记。',
     primaryActions: [
       action('账', '会计任务台账', '确认并完成分配给我的任务', 'pages/task-list/task-list'),
+      action('记', '日常登记', '登记开票、咨询、账务、社保、报税等事项', 'pages/accounting-work-log/accounting-work-log'),
       action('托', '托管客户/客户列表', '查看自己关联客户与托管客户', 'pages/customer-list/customer-list'),
     ],
     todoActions: [
@@ -253,7 +255,7 @@ const WORKBENCH_BY_ROLE = {
       action('件', '办件进度', '查看关联客户办件状态', 'pages/workorder-list/workorder-list'),
     ],
     manageActions: [],
-    note: '开票、社保、申报、个税、年报、周报独立台账将在二期补齐，当前可通过任务与客户服务项跟进。',
+    note: '日常登记由会计手动填写，主管复核；复杂自动核算仍属于后续阶段。',
   },
   '主管': {
     title: '团队管理',
@@ -270,6 +272,7 @@ const WORKBENCH_BY_ROLE = {
     ],
     manageActions: [
       action('数', '数据看板', '查看客户、服务、任务与收费统计', 'pages/dashboard/dashboard'),
+      action('核', '会计台账复核', '按周查看并复核会计日常登记', 'pages/accounting-work-log/accounting-work-log'),
       action('录', '手动看板', '查看经营与工资录入数据', 'pages/manual-business/manual-business'),
     ],
   },
@@ -285,6 +288,7 @@ const WORKBENCH_BY_ROLE = {
       action('客', '客户增减', '查看客户新增、出库与客户层级', 'pages/customer-list/customer-list'),
     ],
     manageActions: [
+      action('计', '会计服务台账', '核对客户会计服务登记与复核状态', 'pages/accounting-work-log/accounting-work-log'),
       action('营', '经营数据', '录入或查看月度收入、成本、利润', 'pages/manual-business/manual-business'),
       action('资', '工资报表', '录入或查看工资、提成、扣款和社保', 'pages/manual-salary/manual-salary'),
     ],
@@ -306,6 +310,7 @@ const WORKBENCH_BY_ROLE = {
       action('填', '客户填单', '新增客户档案', 'pages/customer-form/customer-form'),
       action('营', '经营看板', '查看经营手动录入', 'pages/manual-business/manual-business'),
       action('资', '工资看板', '查看工资手动录入', 'pages/manual-salary/manual-salary'),
+      action('计', '会计服务台账', '查看和复核全部会计日常登记', 'pages/accounting-work-log/accounting-work-log'),
     ],
   },
   default: {

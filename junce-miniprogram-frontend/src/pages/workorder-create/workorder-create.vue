@@ -72,41 +72,42 @@ const submitting = ref(false)
 const serviceType = ref('')
 const serviceItemStatus = ref('')
 
-// 人员列表
-const staffList = ref([])
+// 办理人与回执接收人候选列表
+const handlerList = ref([])
+const receiverList = ref([])
 const handlerId = ref(null)
 const receiptReceiverId = ref(null)
 
 // ========== picker 选项 ==========
 const pickerPlaceholder = '请选择'
-const handlerOptions = computed(() => [pickerPlaceholder, ...staffList.value.map(u => u.realName)])
-const receiverOptions = computed(() => [pickerPlaceholder, ...staffList.value.map(u => u.realName)])
+const handlerOptions = computed(() => [pickerPlaceholder, ...handlerList.value.map(u => u.realName)])
+const receiverOptions = computed(() => [pickerPlaceholder, ...receiverList.value.map(u => u.realName)])
 
-function findStaffIndex(id) {
+function findStaffIndex(users, id) {
   if (!id) return 0
-  const idx = staffList.value.findIndex(u => u.id === id)
+  const idx = users.findIndex(u => u.id === id)
   return idx === -1 ? 0 : idx + 1
 }
 
-const handlerIndex = computed(() => findStaffIndex(handlerId.value))
-const receiverIndex = computed(() => findStaffIndex(receiptReceiverId.value))
+const handlerIndex = computed(() => findStaffIndex(handlerList.value, handlerId.value))
+const receiverIndex = computed(() => findStaffIndex(receiverList.value, receiptReceiverId.value))
 
 const handlerLabel = computed(() => {
-  const u = staffList.value.find(u => u.id === handlerId.value)
+  const u = handlerList.value.find(u => u.id === handlerId.value)
   return u ? u.realName : ''
 })
 const receiverLabel = computed(() => {
-  const u = staffList.value.find(u => u.id === receiptReceiverId.value)
+  const u = receiverList.value.find(u => u.id === receiptReceiverId.value)
   return u ? u.realName : ''
 })
 
 function onHandlerChange(e) {
   const idx = e.detail.value
-  handlerId.value = idx === 0 ? null : staffList.value[idx - 1].id
+  handlerId.value = idx === 0 ? null : handlerList.value[idx - 1].id
 }
 function onReceiverChange(e) {
   const idx = e.detail.value
-  receiptReceiverId.value = idx === 0 ? null : staffList.value[idx - 1].id
+  receiptReceiverId.value = idx === 0 ? null : receiverList.value[idx - 1].id
 }
 
 // ========== 数据加载 ==========
@@ -125,32 +126,63 @@ async function fetchAll() {
   error.value = false
 
   try {
-    const [serviceItems, assignment] = await Promise.all([
+    const [serviceItems, assignment, customer] = await Promise.all([
       get(`/customers/${customerId}/service-items`),
-      get(`/customers/${customerId}/staff-assignment`).catch(() => null)
+      get(`/customers/${customerId}/staff-assignment`).catch(() => null),
+      get(`/customers/${customerId}`)
     ])
 
     // 找到对应服务项
     const items = Array.isArray(serviceItems) ? serviceItems : []
     const matched = items.find(item => String(item.id) === String(serviceItemId))
+    let responsibleRole = ''
     if (matched) {
       serviceType.value = matched.serviceTemplate?.serviceType || ''
       serviceItemStatus.value = matched.status || ''
+      responsibleRole = resolveResponsibleRole(matched.serviceTemplate)
     }
 
-    // 构建人员候选列表（从 staff-assignment）
-    if (assignment) {
-      const candidates = []
-      if (assignment.businessStaff) candidates.push(assignment.businessStaff)
-      if (assignment.accountant) candidates.push(assignment.accountant)
-      // 去重
-      staffList.value = candidates.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i)
+    const owner = customer?.owner
+    const businessStaff = assignment?.businessStaff
+    const accountant = assignment?.accountant
+    const generalAffairs = assignment?.generalAffairs
+    const handlerByRole = {
+      商务: owner ? [owner] : [],
+      业务: businessStaff ? [businessStaff] : [],
+      会计: accountant ? [accountant] : [],
+    }
+
+    handlerList.value = uniqueUsers(
+      handlerByRole[responsibleRole] || [businessStaff, accountant].filter(Boolean)
+    )
+    receiverList.value = uniqueUsers(
+      [owner, businessStaff, accountant, generalAffairs].filter(Boolean)
+    )
+
+    if (handlerList.value.length === 1) {
+      handlerId.value = handlerList.value[0].id
     }
   } catch (e) {
     error.value = true
   } finally {
     loading.value = false
   }
+}
+
+function uniqueUsers(users) {
+  return users.filter((user, index, all) => all.findIndex(item => item.id === user.id) === index)
+}
+
+function resolveResponsibleRole(template) {
+  const role = template?.requiredMaterials?.responsibleRole
+  if (role) return role
+  const legacyRoleMap = {
+    注册: '业务', 地址: '商务', 开户: '业务', 变更: '业务', 注销: '会计',
+    代理: '业务', 社保: '会计', 公积金: '会计', 进出口备案: '业务',
+    食品证: '业务', 道路运输证: '业务', 卫生证: '业务',
+    代理记账: '会计', 财务外包: '会计', 合规项目: '会计'
+  }
+  return legacyRoleMap[template?.serviceType] || ''
 }
 
 // ========== 提交 ==========
@@ -162,6 +194,10 @@ function buildPayload() {
 }
 
 async function handleSubmit() {
+  if (!handlerId.value) {
+    uni.showToast({ title: '请先配置并选择对应岗位的对接人', icon: 'none' })
+    return
+  }
   submitting.value = true
 
   try {

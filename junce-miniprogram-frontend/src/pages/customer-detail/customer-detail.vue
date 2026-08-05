@@ -44,6 +44,38 @@
         <view class="row"><text class="label">生命周期</text><text class="value">{{ customer.lifecycleStage }}</text></view>
       </view>
 
+      <!-- 首次提单完整度与岗位确认 -->
+      <view class="card">
+        <view class="card-title">首次提单</view>
+        <view v-if="intakeLoading" class="card-status">检查中...</view>
+        <view v-else-if="intakeError" class="card-status" style="color: var(--jc-color-error-core);">提单状态加载失败</view>
+        <template v-else-if="intakeStatus">
+          <view class="row">
+            <text class="label">正式提交</text>
+            <text class="si-status" :class="intakeStatus.submitted ? 'status-confirmed' : 'status-pending'">
+              {{ intakeStatus.submitted ? '已提交' : (intakeStatus.ready ? '可提交' : '待补充') }}
+            </text>
+          </view>
+          <view v-if="intakeStatus.missingItems?.length" class="intake-missing">
+            <text class="intake-title">还需完成</text>
+            <text v-for="item in intakeStatus.missingItems" :key="item" class="intake-item">• {{ item }}</text>
+          </view>
+          <view v-if="intakeStatus.assignmentConfirmations?.length" class="intake-confirmations">
+            <text class="intake-title">岗位确认</text>
+            <view v-for="item in intakeStatus.assignmentConfirmations" :key="item.position + item.user.id" class="row">
+              <text class="label">{{ item.position }} · {{ item.user.realName }}</text>
+              <text class="si-status" :class="item.confirmed ? 'status-confirmed' : 'status-pending'">{{ item.confirmed ? '已确认' : '待确认' }}</text>
+            </view>
+          </view>
+          <view v-if="intakeStatus.canSubmit && intakeStatus.ready" class="card-action-right">
+            <button class="btn btn-primary" :disabled="intakeSaving" @tap="handleSubmitIntake">{{ intakeSaving ? '提交中...' : '正式提交提单' }}</button>
+          </view>
+          <view v-if="intakeStatus.canConfirm" class="card-action-right">
+            <button class="btn btn-checkin" :disabled="intakeSaving" @tap="handleConfirmIntake">{{ intakeSaving ? '确认中...' : '确认接单' }}</button>
+          </view>
+        </template>
+      </view>
+
       <!-- 分隔 -->
       <view class="section-divider"><text class="sd-text">业务与服务</text></view>
 
@@ -80,7 +112,7 @@
               <text class="si-create-link" @tap="goToWorkOrderDetail(item.workOrder.id)">查看办件 ›</text>
             </view>
             <!-- 无办件 -->
-            <view v-else class="wo-create-bar">
+            <view v-else-if="canCreateWorkOrder" class="wo-create-bar">
               <text class="si-create-link" @tap="goToCreateWorkOrder(item.id)">+ 创建办件</text>
             </view>
           </view>
@@ -152,9 +184,9 @@
 
       <!-- 操作按钮 -->
       <view class="actions">
-        <button class="btn btn-primary" @tap="goToServiceSelect">服务配置</button>
+        <button v-if="canManageCustomer" class="btn btn-primary" @tap="goToServiceSelect">服务配置</button>
         <button v-if="canConfigStaff" class="btn btn-primary action-btn" @tap="goToStaffConfig">配置人员</button>
-        <button class="btn btn-primary action-btn" @tap="goToEdit">编辑客户</button>
+        <button v-if="canManageCustomer" class="btn btn-primary action-btn" @tap="goToEdit">编辑客户</button>
       </view>
     </view>
   </view>
@@ -164,7 +196,7 @@
 import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import JcH5Back from '../../components/junce/JcH5Back.vue'
-import { get } from '../../utils/request.js'
+import { get, post } from '../../utils/request.js'
 import { useUserStore } from '../../stores/user.js'
 
 const userStore = useUserStore()
@@ -190,6 +222,12 @@ const charge = ref(null)
 const chargeLoading = ref(false)
 const chargeError = ref(false)
 
+// 首次提单
+const intakeStatus = ref(null)
+const intakeLoading = ref(false)
+const intakeError = ref(false)
+const intakeSaving = ref(false)
+
 // 角色判断：商务/主管/管理员可配置人员
 const canConfigStaff = computed(() => {
   const code = userStore.user?.roleCode
@@ -207,6 +245,22 @@ const tenantRegister = ref(null)
 const tenantLoading = ref(false)
 const tenantError = ref(false)
 
+const isCustomerOwner = computed(() => {
+  return Number(customer.value?.ownerId) === Number(userStore.user?.id)
+})
+
+// 客户基本资料和服务项：仅客户主理人本人或管理员可修改。
+const canManageCustomer = computed(() => {
+  const code = userStore.user?.roleCode
+  return code === '管理员' || (code === '商务' && isCustomerOwner.value)
+})
+
+// 创建办件属于客户提单后的分派动作，主管可兜底处理。
+const canCreateWorkOrder = computed(() => {
+  const code = userStore.user?.roleCode
+  return code === '管理员' || code === '主管' || (code === '商务' && isCustomerOwner.value)
+})
+
 // 角色判断：会计/主管/管理员可创建托管
 const canCreateTenant = computed(() => {
   const code = userStore.user?.roleCode
@@ -220,7 +274,7 @@ onLoad((options) => {
     fetchServiceItems()
     fetchStaffAssignment()
     fetchCharge()
-    fetchTenantRegister()
+    fetchIntakeStatus()
   } else {
     error.value = true
   }
@@ -236,7 +290,7 @@ onShow(() => {
     fetchServiceItems()
     fetchStaffAssignment()
     fetchCharge()
-    fetchTenantRegister()
+    fetchIntakeStatus()
   }
 })
 
@@ -247,6 +301,12 @@ async function fetchDetail(id) {
   try {
     const res = await get(`/customers/${id}`)
     customer.value = res
+    if (res.customerCategory === '代理户') {
+      await fetchTenantRegister()
+    } else {
+      tenantRegister.value = null
+      tenantError.value = false
+    }
   } catch (e) {
     error.value = true
   } finally {
@@ -310,6 +370,42 @@ async function fetchTenantRegister() {
     tenantError.value = true
   } finally {
     tenantLoading.value = false
+  }
+}
+
+async function fetchIntakeStatus() {
+  intakeLoading.value = true
+  intakeError.value = false
+  try {
+    intakeStatus.value = await get(`/customers/${currentId}/intake-status`)
+  } catch (e) {
+    intakeError.value = true
+  } finally {
+    intakeLoading.value = false
+  }
+}
+
+async function handleSubmitIntake() {
+  intakeSaving.value = true
+  try {
+    intakeStatus.value = await post(`/customers/${currentId}/submit-intake`)
+    uni.showToast({ title: '提单已提交', icon: 'success' })
+  } catch (e) {
+    // request.js 已提示
+  } finally {
+    intakeSaving.value = false
+  }
+}
+
+async function handleConfirmIntake() {
+  intakeSaving.value = true
+  try {
+    intakeStatus.value = await post(`/customers/${currentId}/confirm-intake-assignment`)
+    uni.showToast({ title: '接单已确认', icon: 'success' })
+  } catch (e) {
+    // request.js 已提示
+  } finally {
+    intakeSaving.value = false
   }
 }
 
@@ -422,6 +518,30 @@ function formatAmount(val) {
   margin-bottom: 20rpx;
   padding-bottom: 16rpx;
   border-bottom: 2rpx solid var(--jc-color-surface-container);
+}
+
+.intake-missing,
+.intake-confirmations {
+  margin-top: 20rpx;
+  padding: 20rpx;
+  background: var(--jc-color-surface-container);
+  border-radius: 10rpx;
+}
+
+.intake-title {
+  display: block;
+  margin-bottom: 10rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: var(--jc-color-on-surface);
+}
+
+.intake-item {
+  display: block;
+  padding: 4rpx 0;
+  font-size: 24rpx;
+  line-height: 34rpx;
+  color: var(--jc-color-on-surface-variant);
 }
 
 .row {

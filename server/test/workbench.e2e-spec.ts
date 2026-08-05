@@ -100,7 +100,14 @@ describe('Workbench todos (e2e)', () => {
       .get('/service-templates')
       .set('Authorization', bearer('admin'))
       .expect(200);
-    const templateIds = templateRes.body.slice(0, 5).map((item: any) => item.id);
+    const templateIds = templateRes.body
+      .filter(
+        (item: any) =>
+          !Array.isArray(item.requiredMaterials) &&
+          item.requiredMaterials?.responsibleRole === '业务',
+      )
+      .slice(0, 5)
+      .map((item: any) => item.id);
     expect(templateIds.length).toBeGreaterThanOrEqual(4);
 
     const owned = await request(httpServer)
@@ -159,6 +166,12 @@ describe('Workbench todos (e2e)', () => {
     await request(httpServer)
       .patch(`/work-orders/${workOrders[2].id}`)
       .set('Authorization', bearer('yewu'))
+      .send({ status: '办件中' })
+      .expect(200);
+
+    await request(httpServer)
+      .patch(`/work-orders/${workOrders[2].id}`)
+      .set('Authorization', bearer('yewu'))
       .send({ status: '办结' })
       .expect(200);
 
@@ -173,20 +186,90 @@ describe('Workbench todos (e2e)', () => {
       })
       .expect(201);
 
+    async function createArchivedProxy(
+      companyName: string,
+      creator: 'shangwu' | 'admin',
+      templateId: number,
+    ) {
+      const customer = await request(httpServer)
+        .post('/customers')
+        .set('Authorization', bearer(creator))
+        .send({ companyName, customerCategory: '代理户' })
+        .expect(201);
+      const items = await request(httpServer)
+        .post(`/customers/${customer.body.id}/service-items`)
+        .set('Authorization', bearer(creator))
+        .send({ templateIds: [templateId] })
+        .expect(201);
+      const order = await request(httpServer)
+        .post('/work-orders')
+        .set('Authorization', bearer(creator))
+        .send({
+          serviceItemId: items.body.created[0].id,
+          handlerId:
+            creator === 'shangwu'
+              ? auth.yewu.user.id
+              : auth.admin.user.id,
+          receiptReceiverId: auth[creator].user.id,
+        })
+        .expect(201);
+      await request(httpServer)
+        .patch(`/work-orders/${order.body.id}`)
+        .set('Authorization', bearer('admin'))
+        .send({ status: '办件中' })
+        .expect(200);
+      await request(httpServer)
+        .patch(`/work-orders/${order.body.id}`)
+        .set('Authorization', bearer('admin'))
+        .send({ status: '办结' })
+        .expect(200);
+      await request(httpServer)
+        .post(`/work-orders/${order.body.id}/check-in`)
+        .set('Authorization', bearer('admin'))
+        .send({ archiveFiles: [{ name: '托管前归档.pdf', url: '/uploads/tenant-before.pdf' }] })
+        .expect(201);
+      return customer.body;
+    }
+
+    const assignedTenantCustomer = await createArchivedProxy(
+      `P1待确认分派客户-${suffix}`,
+      'shangwu',
+      templateIds[3],
+    );
     const tenant = await request(httpServer)
       .post('/tenant-registers')
       .set('Authorization', bearer('kuaiji'))
       .send({
-        customerId: ownedCustomerId,
+        customerId: assignedTenantCustomer.id,
         enterpriseDetail: { name: 'P1待办企业概况' },
         servicePlan: { plan: 'P1待办服务方案' },
       })
       .expect(201);
 
     await request(httpServer)
+      .post(`/tenant-registers/${tenant.body.id}/confirm-plan`)
+      .set('Authorization', bearer('shangwu'))
+      .expect(201);
+
+    await request(httpServer)
       .post(`/tenant-registers/${tenant.body.id}/assign-accountant`)
       .set('Authorization', bearer('zhuguan'))
       .send({ accountantId: auth.kuaiji.user.id })
+      .expect(201);
+
+    const pendingPlanCustomer = await createArchivedProxy(
+      `P1方案待确认客户-${suffix}`,
+      'shangwu',
+      templateIds[3],
+    );
+    await request(httpServer)
+      .post('/tenant-registers')
+      .set('Authorization', bearer('kuaiji'))
+      .send({
+        customerId: pendingPlanCustomer.id,
+        enterpriseDetail: { name: 'P1方案待确认企业概况' },
+        servicePlan: { plan: 'P1方案待确认服务方案' },
+      })
       .expect(201);
 
     await request(httpServer)
@@ -252,16 +335,15 @@ describe('Workbench todos (e2e)', () => {
       })
       .expect(201);
 
-    const unassigned = await request(httpServer)
-      .post('/customers')
-      .set('Authorization', bearer('admin'))
-      .send({
-        companyName: names.unassignedCustomer,
-        customerCategory: '代理户',
-      })
-      .expect(201);
+    const unassigned = {
+      body: await createArchivedProxy(
+        names.unassignedCustomer,
+        'admin',
+        templateIds[3],
+      ),
+    };
 
-    await request(httpServer)
+    const unassignedTenant = await request(httpServer)
       .post('/tenant-registers')
       .set('Authorization', bearer('admin'))
       .send({
@@ -269,6 +351,10 @@ describe('Workbench todos (e2e)', () => {
         enterpriseDetail: { name: 'P1待分派企业概况' },
         servicePlan: { plan: 'P1待分派服务方案' },
       })
+      .expect(201);
+    await request(httpServer)
+      .post(`/tenant-registers/${unassignedTenant.body.id}/confirm-plan`)
+      .set('Authorization', bearer('admin'))
       .expect(201);
 
     const fission = await request(httpServer)

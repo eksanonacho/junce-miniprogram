@@ -201,6 +201,10 @@ function validateNumberFields() {
       uni.showToast({ title: '年流水不能为负数', icon: 'none' })
       return false
     }
+    if (Number(v) > 9999999999.99) {
+      uni.showToast({ title: '年流水不能超过100亿元', icon: 'none' })
+      return false
+    }
     const parts = v.split('.')
     if (parts.length === 2 && parts[1].length > 2) {
       uni.showToast({ title: '年流水最多保留两位小数', icon: 'none' })

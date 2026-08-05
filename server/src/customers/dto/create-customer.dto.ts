@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsDateString,
   Min,
+  Max,
 } from 'class-validator';
 import { CompanyType, CustomerCategory, CustomerTier } from '../../../generated/prisma/client';
 
@@ -31,6 +32,9 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(9999999999.99, {
+    message: 'annualRevenue 不能超过 9999999999.99',
+  })
   annualRevenue?: number;
 
   @IsOptional()

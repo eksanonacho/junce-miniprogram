@@ -3,13 +3,13 @@
 > **这个文件是给谁看的**:任何要碰数据库的开发者(或 AI)。
 > **什么时候用**:理解现有表结构、新建表、改字段、排查数据问题前。
 > **解决什么问题**:看懂数据库目前怎么设计、哪些表已完成、哪些后续要加、改库的规矩是什么。
-> 最后更新:2026-07-24。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。11 个 migration，17 张表（含 notifications）。
+> 最后更新:2026-07-24。技术栈:PostgreSQL 16 + Prisma。库名:junce_dev。13 个 migration，19 张表。
 
 ---
 
 ## 一、当前已实现表
 
-目前数据库共 17 张表：16 张业务表（roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders / tenant_registers / tasks / fission_leads / manual_business_reports / manual_salary_reports / notifications）+ 1 张 Prisma 系统表（_prisma_migrations）。
+目前数据库共 19 张表：18 张业务表（roles / users / customers / service_templates / service_read_confirmations / service_items / staff_assignments / work_orders / charges / collection_reminders / tenant_registers / tasks / fission_leads / manual_business_reports / manual_salary_reports / notifications / intake_assignment_confirmations / accounting_work_logs）+ 1 张 Prisma 系统表（_prisma_migrations）。
 
 ### 1.1 roles — 角色主数据表
 - **用途**:存系统的 6 种岗位角色,是权限体系的基础。
@@ -48,6 +48,7 @@
   - `customerCategory`:**枚举 CustomerCategory**(新用户/代理户)
   - `tier`:**枚举 CustomerTier**(VIP/优质/中低/零申报),分层自动判断逻辑待客户给标准(目前手动选)
   - `lifecycleStage`:**枚举 LifecycleStage**,默认值"填单",由系统控制流转
+  - `intakeSubmittedAt`:首次提单正式提交时间，可空；关键资料变化后自动清空
   - `ownerId`:外键 → users.id,客户主理人
 - **外键**:`ownerId` → users(id)。每个客户必须有一个主理人。
 - **金额字段**:annualRevenue,Decimal(12,2)
@@ -243,10 +244,10 @@ Files 模块不新增数据库表。文件通过 multer 写入本地磁盘 `serv
 
 ### 1.15 notifications — 通知消息表
 
-- **用途**：系统通知中心，各业务模块在关键操作时自动创建通知（办件状态变更、任务分配、收费确认/催收、托管分派会计、裂变线索确认等）。
+- **用途**：系统通知中心，各业务模块在关键操作时自动创建通知（首次提单、办件状态变更、任务分配、收费确认/催收、托管分派会计、裂变线索确认等）。
 - **主键**：id
 - **关键字段**：
-  - `type`：通知类型（work_order / task / charge / tenant / fission / system）
+  - `type`：通知类型（customer_intake / work_order / task / charge / tenant / fission / system）
   - `title`：通知标题
   - `body`：通知正文
   - `senderId`：发送人，外键→users（可空，系统通知无发送人）
@@ -260,6 +261,33 @@ Files 模块不新增数据库表。文件通过 multer 写入本地磁盘 `serv
 - **migration**：20260724030925_add_notifications（2026-07-24 补齐，最初通过 prisma db push 创建）
 - **关联接口**：GET /notifications、GET /notifications/unread-count、PATCH /notifications/:id/read、PATCH /notifications/read-all
 - **权限**：仅限认证用户，数据按 receiverId 隔离
+
+### 1.16 intake_assignment_confirmations — 首次提单岗位确认表
+
+- **用途**：记录客户首次提单正式提交后，被指派员工对本人岗位的接单确认。
+- **主键**：id
+- **关键字段**：
+  - `customerId`：外键 → customers.id
+  - `userId`：外键 → users.id
+  - `position`：确认岗位中文值（业务岗 / 会计岗 / 顾问岗 / 总务岗）
+  - `confirmedAt`：确认时间
+  - `createdAt`：记录创建时间
+- **唯一约束**：`(customerId, userId, position)`，同一客户、员工和岗位只保留一条确认。
+- **外键**：customerId→customers、userId→users，均为级联删除。
+- **失效规则**：客户画像、服务项、人员配置或收费记录变化时，删除该客户全部岗位确认并清空 `customers.intake_submitted_at`。
+- **migration**：`20260724160000_add_customer_intake_confirmations`
+- **关联接口**：GET `/customers/:id/intake-status`、POST `/customers/:id/submit-intake`、POST `/customers/:id/confirm-intake-assignment`
+
+### 1.17 accounting_work_logs — 会计日常手动台账
+
+- **用途**：集中记录会计负责客户的出入库、开票、咨询、账务、社保、报税、年报等日常工作，并支持主管复核。
+- **关键字段**：customerId、accountantId、recordType、recordDate、content、status、remark、reviewedAt、reviewedById。
+- **状态**：`已登记` / `已复核`。
+- **外键**：customerId→customers（级联删除）；accountantId→users；reviewedById→users（复核人删除后置空）。
+- **索引**：`(accountantId, recordDate)`、`(customerId, recordDate)`、`(recordType, recordDate)`。
+- **权限**：会计仅写本人负责客户；主管/管理员复核；关联岗位按数据范围读取。
+- **migration**：`20260724173000_add_accounting_work_logs`
+- **关联接口**：`/accounting-work-logs` 四个接口。
 
 ---
 

@@ -49,7 +49,7 @@ export class StaffAssignmentsService {
     if (data.generalAffairsId !== undefined)
       upsertData.generalAffairsId = data.generalAffairsId;
 
-    return this.prisma.staffAssignment.upsert({
+    const result = await this.prisma.staffAssignment.upsert({
       where: { customerId },
       update: upsertData,
       create: { customerId, ...upsertData },
@@ -60,6 +60,16 @@ export class StaffAssignmentsService {
         generalAffairs: { select: { id: true, realName: true, role: { select: { code: true } } } },
       },
     });
+    await this.prisma.$transaction([
+      this.prisma.customer.update({
+        where: { id: customerId },
+        data: { intakeSubmittedAt: null },
+      }),
+      this.prisma.intakeAssignmentConfirmation.deleteMany({
+        where: { customerId },
+      }),
+    ]);
+    return result;
   }
 
   // 查客户的人员配置

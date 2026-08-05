@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ItemStatus } from '../../generated/prisma/client';
@@ -68,6 +69,18 @@ export class ServiceItemsService {
       results.push(item);
     }
 
+    if (results.length > 0) {
+      await this.prisma.$transaction([
+        this.prisma.customer.update({
+          where: { id: customerId },
+          data: { intakeSubmittedAt: null },
+        }),
+        this.prisma.intakeAssignmentConfirmation.deleteMany({
+          where: { customerId },
+        }),
+      ]);
+    }
+
     return { created: results, errors };
   }
 
@@ -116,6 +129,11 @@ export class ServiceItemsService {
     });
     if (!item) {
       throw new NotFoundException(`服务项 id=${id} 不存在`);
+    }
+    if (item.workOrder) {
+      throw new BadRequestException(
+        '该服务项已关联办件，请通过办件流转更新状态',
+      );
     }
     this.permissions.ensure(
       this.permissions.canUpdateServiceStatus(user, item),

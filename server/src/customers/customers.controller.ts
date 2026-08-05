@@ -52,4 +52,31 @@ export class CustomersController {
   ) {
     return this.customersService.update(id, dto, req.user as AuthUser);
   }
+
+  @Get(':id/intake-status')
+  async getIntakeStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.customersService.getIntakeStatus(id, req.user as AuthUser);
+  }
+
+  @Post(':id/submit-intake')
+  async submitIntake(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.customersService.submitIntake(id, req.user as AuthUser);
+  }
+
+  @Post(':id/confirm-intake-assignment')
+  async confirmIntakeAssignment(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.customersService.confirmIntakeAssignment(
+      id,
+      req.user as AuthUser,
+    );
+  }
 }

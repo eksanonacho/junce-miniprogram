@@ -129,6 +129,7 @@ model User {
 
   // 该用户的已读确认记录
   templateConfirmations ServiceReadConfirmation[]
+  intakeConfirmations   IntakeAssignmentConfirmation[]
 
   // 该用户被指派的人员配置（四个岗位的反向关系）
   businessAssignments  StaffAssignment[] @relation("BusinessStaff")
@@ -165,6 +166,8 @@ model User {
   businessReports      ManualBusinessReport[]
   createdSalaryReports ManualSalaryReport[] @relation("SalaryCreator")
   salaryReports        ManualSalaryReport[] @relation("SalaryUser")
+  accountingWorkLogs   AccountingWorkLog[]  @relation("AccountingLogAccountant")
+  reviewedAccountingWorkLogs AccountingWorkLog[] @relation("AccountingLogReviewer")
 
   @@map("users")
 }
@@ -183,6 +186,7 @@ model Customer {
   customerCategory CustomerCategory @map("customer_category") // 新用户/代理户
   tier             CustomerTier?                              // VIP/优质/中低/零申报
   lifecycleStage   LifecycleStage   @default(填单) @map("lifecycle_stage") // 生命周期
+  intakeSubmittedAt DateTime?       @map("intake_submitted_at") // 首次提单正式提交时间
 
   // 主理人（商务岗）
   ownerId          Int              @map("owner_id")
@@ -193,6 +197,7 @@ model Customer {
 
   // 该客户的已读确认记录
   readConfirmations ServiceReadConfirmation[]
+  intakeConfirmations IntakeAssignmentConfirmation[]
 
   // 该客户的服务项
   serviceItems     ServiceItem[]
@@ -214,8 +219,27 @@ model Customer {
 
   // 该客户作为来源的裂变线索
   fissionLeads      FissionLead[]
+  accountingWorkLogs AccountingWorkLog[]
 
   @@map("customers")
+}
+
+// ---- 首次提单岗位确认 ----
+model IntakeAssignmentConfirmation {
+  id          Int       @id @default(autoincrement())
+  customerId  Int       @map("customer_id")
+  userId      Int       @map("user_id")
+  position    String
+  confirmedAt DateTime  @default(now()) @map("confirmed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, userId, position], name: "unique_intake_assignment_confirmation")
+  @@index([customerId])
+  @@index([userId])
+  @@map("intake_assignment_confirmations")
 }
 
 // ---- 服务模板表 ----
@@ -470,6 +494,31 @@ model ManualSalaryReport {
 
   @@unique([month, userId], name: "unique_month_user")
   @@map("manual_salary_reports")
+}
+
+// ---- 会计日常手动台账 ----
+model AccountingWorkLog {
+  id            Int       @id @default(autoincrement())
+  customerId    Int       @map("customer_id")
+  accountantId  Int       @map("accountant_id")
+  recordType    String    @map("record_type")
+  recordDate    DateTime  @map("record_date")
+  content       String
+  status        String    @default("已登记")
+  remark        String?
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewedById  Int?      @map("reviewed_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  accountant    User      @relation("AccountingLogAccountant", fields: [accountantId], references: [id])
+  reviewedBy    User?     @relation("AccountingLogReviewer", fields: [reviewedById], references: [id])
+
+  @@index([accountantId, recordDate])
+  @@index([customerId, recordDate])
+  @@index([recordType, recordDate])
+  @@map("accounting_work_logs")
 }
 
 // ---- 消息通知表 ----

@@ -25,13 +25,13 @@
       <view class="card">
         <view class="card-title">办件信息</view>
         <view class="row"><text class="ll">客户</text><text class="vv">{{ wo.customer?.companyName || '—' }}</text></view>
-        <view class="row" @tap="wo.status !== '已打卡' && startPickUser('handler')">
+        <view class="row" @tap="canOperate && wo.status !== '已打卡' && startPickUser('handler')">
           <text class="ll">对接人</text>
-          <text class="vv" :class="{ 'vv-edit': wo.status !== '已打卡' }">{{ wo.handler?.realName || '未指派' }} {{ wo.status !== '已打卡' ? '›' : '' }}</text>
+          <text class="vv" :class="{ 'vv-edit': canOperate && wo.status !== '已打卡' }">{{ wo.handler?.realName || '未指派' }} {{ canOperate && wo.status !== '已打卡' ? '›' : '' }}</text>
         </view>
-        <view class="row" @tap="wo.status !== '已打卡' && startPickUser('receiver')">
+        <view class="row" @tap="canOperate && wo.status !== '已打卡' && startPickUser('receiver')">
           <text class="ll">回执接收人</text>
-          <text class="vv" :class="{ 'vv-edit': wo.status !== '已打卡' }">{{ wo.receiptReceiver?.realName || '未指派' }} {{ wo.status !== '已打卡' ? '›' : '' }}</text>
+          <text class="vv" :class="{ 'vv-edit': canOperate && wo.status !== '已打卡' }">{{ wo.receiptReceiver?.realName || '未指派' }} {{ canOperate && wo.status !== '已打卡' ? '›' : '' }}</text>
         </view>
 
         <!-- 人员选择浮层 -->
@@ -79,7 +79,7 @@
       </view>
 
       <!-- 状态流转按钮 -->
-      <view v-if="wo.status !== '已打卡'" class="actions">
+      <view v-if="canOperate && wo.status !== '已打卡'" class="actions">
         <button
           v-if="wo.status === '待办'"
           class="btn btn-primary"
@@ -105,8 +105,11 @@
           办结打卡
         </button>
       </view>
-      <view v-else class="actions">
+      <view v-else-if="wo.status === '已打卡'" class="actions">
         <text class="terminal-text">已打卡（终态）</text>
+      </view>
+      <view v-else class="actions">
+        <text class="terminal-text">仅查看，由当前对接人办理</text>
       </view>
 
       <!-- 办结打卡子视图 -->
@@ -155,12 +158,14 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import JcH5Back from '../../components/junce/JcH5Back.vue'
 import { get, patch, post } from '../../utils/request.js'
 import { BASE_URL } from '../../config/index.js'
 import { useUserStore } from '../../stores/user.js'
+
+const userStore = useUserStore()
 
 let currentId = ''
 let skipNextShow = true
@@ -182,6 +187,14 @@ const selectedReceiverId = ref(0)
 const showCheckin = ref(false)
 const checkinFiles = ref([])
 const submittingCheckin = ref(false)
+
+// 对接人本人负责办理；主管和管理员保留兜底权限。
+const canOperate = computed(() => {
+  const user = userStore.user
+  if (!user || !wo.value) return false
+  if (user.roleCode === '管理员' || user.roleCode === '主管') return true
+  return Number(wo.value.handler?.id) === Number(user.id)
+})
 
 onLoad((options) => {
   currentId = options.id
@@ -277,7 +290,6 @@ function handleChooseFile() {
 }
 
 function uploadFile(tempFile) {
-  const userStore = useUserStore()
   const token = userStore.token
 
   uni.showLoading({ title: '上传中...' })

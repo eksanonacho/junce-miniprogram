@@ -8,8 +8,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
 import { UpdateWorkOrderDto } from './dto/update-work-order.dto';
-import { WorkOrderStatus } from '../../generated/prisma/client';
+import {
+  ItemStatus,
+  WorkOrderStatus,
+} from '../../generated/prisma/client';
 import { AuthUser, PermissionService } from '../permissions/permissions.service';
+import { CustomerLifecycleService } from '../customer-lifecycle/customer-lifecycle.service';
 
 @Injectable()
 export class WorkOrdersService {
@@ -17,6 +21,7 @@ export class WorkOrdersService {
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
     private readonly notifications: NotificationsService,
+    private readonly customerLifecycle: CustomerLifecycleService,
   ) {}
 
   // 创建办件
@@ -24,7 +29,13 @@ export class WorkOrdersService {
     // 验证服务项存在，并拿到 customerId
     const item = await this.prisma.serviceItem.findUnique({
       where: { id: dto.serviceItemId },
-      select: { id: true, customerId: true, serviceTemplate: { select: { serviceType: true } } },
+      select: {
+        id: true,
+        customerId: true,
+        serviceTemplate: {
+          select: { serviceType: true, requiredMaterials: true },
+        },
+      },
     });
     if (!item) {
       throw new NotFoundException(`服务项 id=${dto.serviceItemId} 不存在`);
@@ -34,7 +45,7 @@ export class WorkOrdersService {
       include: { staffAssignment: true, tenantRegister: true },
     });
     this.permissions.ensure(
-      !!customer && this.permissions.canReadCustomer(user, customer),
+      !!customer && this.permissions.canCreateWorkOrder(user, customer),
       '无权限为该服务项创建办件',
     );
 
@@ -62,10 +73,14 @@ export class WorkOrdersService {
 
     // 验证 handler 存在（如果传了）
     if (dto.handlerId) {
-      await this.validateUser(dto.handlerId);
+      await this.validateHandlerRole(
+        dto.handlerId,
+        item.serviceTemplate.serviceType,
+        item.serviceTemplate.requiredMaterials,
+      );
     }
     if (dto.receiptReceiverId) {
-      await this.validateUser(dto.receiptReceiverId);
+      await this.validateCustomerParticipant(dto.receiptReceiverId, customer!);
     }
 
     const wo = await this.prisma.workOrder.create({
@@ -142,6 +157,17 @@ export class WorkOrdersService {
         '不允许直接修改为"已打卡"。请通过 POST /work-orders/:id/check-in 完成打卡',
       );
     }
+    if (dto.status && dto.status !== wo.status) {
+      const allowedNextStatus: Partial<Record<WorkOrderStatus, WorkOrderStatus>> = {
+        待办: '办件中',
+        办件中: '办结',
+      };
+      if (allowedNextStatus[wo.status] !== dto.status) {
+        throw new BadRequestException(
+          `办件状态不能从“${wo.status}”直接变更为“${dto.status}”`,
+        );
+      }
+    }
 
     const data: any = { ...dto };
 
@@ -151,16 +177,34 @@ export class WorkOrdersService {
     }
 
     // 验证 handler/receiptReceiver 存在
-    if (dto.handlerId) await this.validateUser(dto.handlerId);
-    if (dto.receiptReceiverId) await this.validateUser(dto.receiptReceiverId);
+    if (dto.handlerId) {
+      await this.validateHandlerRole(
+        dto.handlerId,
+        wo.serviceItem?.serviceTemplate?.serviceType,
+        wo.serviceItem?.serviceTemplate?.requiredMaterials,
+      );
+    }
+    if (dto.receiptReceiverId) {
+      await this.validateCustomerParticipant(dto.receiptReceiverId, wo.customer);
+    }
 
     // TODO: 后续 WorkOrder status 变化可同步更新 ServiceItem.status，
     // 避免服务项状态和办件状态不一致。本期暂不联动。
 
-    const updated = await this.prisma.workOrder.update({
-      where: { id },
-      data,
-      include: this.includes(),
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.workOrder.update({
+        where: { id },
+        data,
+        include: this.includes(),
+      });
+      if (dto.status) {
+        await tx.serviceItem.update({
+          where: { id: wo.serviceItemId },
+          data: { status: this.toItemStatus(dto.status) },
+        });
+      }
+      await this.customerLifecycle.sync(wo.customerId, tx);
+      return result;
     });
 
     // 办结时通知商务
@@ -194,14 +238,22 @@ export class WorkOrdersService {
       );
     }
 
-    const result = await this.prisma.workOrder.update({
-      where: { id },
-      data: {
-        status: '已打卡',
-        archiveFiles,
-        checkedInAt: new Date(),
-      },
-      include: this.includes(),
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.workOrder.update({
+        where: { id },
+        data: {
+          status: '已打卡',
+          archiveFiles,
+          checkedInAt: new Date(),
+        },
+        include: this.includes(),
+      });
+      await tx.serviceItem.update({
+        where: { id: wo.serviceItemId },
+        data: { status: '办结' },
+      });
+      await this.customerLifecycle.sync(wo.customerId, tx);
+      return updated;
     });
 
     // 通知商务
@@ -224,8 +276,88 @@ export class WorkOrdersService {
   // ---- helpers ----
 
   private async validateUser(userId: number) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
     if (!user) throw new NotFoundException(`用户 id=${userId} 不存在`);
+    return user;
+  }
+
+  private toItemStatus(status: WorkOrderStatus): ItemStatus {
+    return status === '已打卡' ? '办结' : status;
+  }
+
+  private async validateHandlerRole(
+    userId: number,
+    serviceType?: string,
+    requiredMaterials?: unknown,
+  ) {
+    const handler = await this.validateUser(userId);
+    const responsibleRole = this.resolveResponsibleRole(
+      serviceType,
+      requiredMaterials,
+    );
+
+    const isFallbackOperator = ['主管', '管理员'].includes(handler.role.code);
+    if (
+      responsibleRole &&
+      handler.role.code !== responsibleRole &&
+      !isFallbackOperator
+    ) {
+      throw new BadRequestException(
+        `“${serviceType || '该服务'}”应由${responsibleRole}角色办理，不能指派给${handler.role.code}角色`,
+      );
+    }
+  }
+
+  private async validateCustomerParticipant(userId: number, customer: any) {
+    await this.validateUser(userId);
+    const allowedIds = new Set(
+      [
+        customer?.ownerId,
+        customer?.staffAssignment?.businessStaffId,
+        customer?.staffAssignment?.accountantId,
+        customer?.staffAssignment?.consultantId,
+        customer?.staffAssignment?.generalAffairsId,
+      ].filter((id) => id != null),
+    );
+    if (!allowedIds.has(userId)) {
+      throw new BadRequestException('回执接收人必须是该客户已配置的相关人员');
+    }
+  }
+
+  private resolveResponsibleRole(
+    serviceType?: string,
+    requiredMaterials?: unknown,
+  ): string | undefined {
+    if (
+      requiredMaterials &&
+      !Array.isArray(requiredMaterials) &&
+      typeof requiredMaterials === 'object'
+    ) {
+      const role = (requiredMaterials as Record<string, unknown>).responsibleRole;
+      if (typeof role === 'string' && role) return role;
+    }
+
+    const legacyRoleMap: Record<string, string> = {
+      注册: '业务',
+      地址: '商务',
+      开户: '业务',
+      变更: '业务',
+      注销: '会计',
+      代理: '业务',
+      社保: '会计',
+      公积金: '会计',
+      进出口备案: '业务',
+      食品证: '业务',
+      道路运输证: '业务',
+      卫生证: '业务',
+      代理记账: '会计',
+      财务外包: '会计',
+      合规项目: '会计',
+    };
+    return serviceType ? legacyRoleMap[serviceType] : undefined;
   }
 
   private includes() {
@@ -235,7 +367,13 @@ export class WorkOrdersService {
         select: {
           id: true,
           status: true,
-          serviceTemplate: { select: { id: true, serviceType: true } },
+          serviceTemplate: {
+            select: {
+              id: true,
+              serviceType: true,
+              requiredMaterials: true,
+            },
+          },
         },
       },
       handler: { select: { id: true, realName: true } },
@@ -255,7 +393,13 @@ export class WorkOrdersService {
         select: {
           id: true,
           status: true,
-          serviceTemplate: { select: { id: true, serviceType: true } },
+          serviceTemplate: {
+            select: {
+              id: true,
+              serviceType: true,
+              requiredMaterials: true,
+            },
+          },
         },
       },
       handler: { select: { id: true, realName: true } },

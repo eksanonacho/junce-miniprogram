@@ -245,6 +245,8 @@ npm run build:mp-weixin
 - 当前状态：`docs/PROJECT_STATE_SNAPSHOT.md`
 - 总览：`docs/README.md`
 - 开发过程：根目录 `.docs`
+- 员工操作变化：`docs/君册财税内部员工小程序使用手册（面向用户）.md`
+- 业务规则、权限、状态机或测试变化：`docs/君册财税内部员工小程序使用手册（面向开发者）.md`
 
 前端目录内的历史交接文档可以保留作为记录，但项目约束只以根目录本文件为准，不再创建其他 `CLAUDE.md`。
 

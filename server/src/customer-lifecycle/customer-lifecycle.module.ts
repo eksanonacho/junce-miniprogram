@@ -1,0 +1,9 @@
+import { Global, Module } from '@nestjs/common';
+import { CustomerLifecycleService } from './customer-lifecycle.service';
+
+@Global()
+@Module({
+  providers: [CustomerLifecycleService],
+  exports: [CustomerLifecycleService],
+})
+export class CustomerLifecycleModule {}

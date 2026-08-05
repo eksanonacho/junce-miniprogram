@@ -22,11 +22,11 @@
         <view class="card-title">托管信息</view>
         <view class="form-item">
           <text class="label">企业概况</text>
-          <textarea class="textarea" v-model="form.enterpriseDetail" placeholder="请输入企业概况（选填）" :disabled="submitting" />
+          <textarea class="textarea" v-model="form.enterpriseDetail" placeholder="请输入企业概况（必填）" :disabled="submitting" />
         </view>
         <view class="form-item">
           <text class="label">服务方案</text>
-          <textarea class="textarea" v-model="form.servicePlan" placeholder="请输入服务方案（选填）" :disabled="submitting" />
+          <textarea class="textarea" v-model="form.servicePlan" placeholder="请输入服务方案（必填）" :disabled="submitting" />
         </view>
         <view class="submit-area">
           <button class="btn" :class="submitting ? 'btn-disabled' : 'btn-primary'" :disabled="submitting" @tap="handleCreate">
@@ -38,6 +38,15 @@
 
     <!-- view 模式 -->
     <view v-else-if="tr" class="detail">
+      <view class="card">
+        <view class="card-title">托管流程</view>
+        <view class="flow-row">
+          <text class="flow-step done">1 办结归档</text>
+          <text :class="['flow-step', tr.planConfirmedByOwner ? 'done' : 'current']">2 方案确认</text>
+          <text :class="['flow-step', tr.assignedAccountantId ? 'done' : '']">3 分派会计</text>
+          <text :class="['flow-step', tr.assignConfirmed ? 'done' : '']">4 会计接收</text>
+        </view>
+      </view>
       <view class="status-header">
         <text class="si-status" :class="tr.planConfirmedByOwner ? 'status-confirmed' : 'status-pending'">{{ tr.planConfirmedByOwner ? '已确认' : '待确认' }}</text>
         <text class="sh-label">{{ tr.customer?.companyName || '—' }}</text>
@@ -167,13 +176,16 @@ function onAccountantChange(e) {
 
 // ========== 权限 ==========
 const roleCode = computed(() => userStore.user?.roleCode || '')
-const canEdit = computed(() => roleCode.value === '会计' || roleCode.value === '主管' || roleCode.value === '管理员')
+const canEdit = computed(() => {
+  if (!tr.value || tr.value.planConfirmedByOwner) return false
+  return roleCode.value === '会计' || roleCode.value === '主管' || roleCode.value === '管理员'
+})
 const canConfirmPlan = computed(() => {
   if (!tr.value || tr.value.planConfirmedByOwner) return false
   if (roleCode.value === '管理员') return true
   return roleCode.value === '商务' && tr.value.customer?.ownerId === userStore.user?.id
 })
-const canAssignAccountant = computed(() => (roleCode.value === '主管' || roleCode.value === '管理员') && tr.value && !tr.value.assignedAccountantId)
+const canAssignAccountant = computed(() => (roleCode.value === '主管' || roleCode.value === '管理员') && tr.value?.planConfirmedByOwner && !tr.value.assignedAccountantId)
 const canConfirmAssignment = computed(() => {
   if (!tr.value || tr.value.assignConfirmed || !tr.value.assignedAccountantId) return false
   if (roleCode.value === '管理员') return true
@@ -278,6 +290,10 @@ async function handleConfirmAssignment() {
 
 // ========== 创建 ==========
 async function handleCreate() {
+  if (!form.value.enterpriseDetail.trim() || !form.value.servicePlan.trim()) {
+    uni.showToast({ title: '请填写企业概况和服务方案', icon: 'none' })
+    return
+  }
   submitting.value = true
   const payload = { customerId: Number(customerIdForCreate) }
   if (form.value.enterpriseDetail.trim()) payload.enterpriseDetail = form.value.enterpriseDetail.trim()
@@ -318,6 +334,10 @@ function goBack() { uni.navigateBack() }
 .textarea { width: 100%; min-height: 160rpx; padding: 16rpx; border: 1rpx solid var(--jc-color-outline-variant); border-radius: 10rpx; font-size: 28rpx; background: var(--jc-color-surface-container-lowest); box-sizing: border-box; }
 .picker-view { height: 80rpx; padding: 0 20rpx; border: 1rpx solid var(--jc-color-outline-variant); border-radius: 10rpx; font-size: 28rpx; background: var(--jc-color-surface-container-lowest); display: flex; align-items: center; }
 .placeholder { color: var(--jc-color-outline); }
+.flow-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12rpx; }
+.flow-step { padding: 14rpx 10rpx; border-radius: 8rpx; text-align: center; font-size: 22rpx; color: var(--jc-color-outline); background: var(--jc-color-surface-container); }
+.flow-step.current { color: var(--jc-color-warning); border: 1rpx solid var(--jc-color-warning); }
+.flow-step.done { color: var(--jc-color-success); background: rgba(34, 197, 94, 0.08); }
 .submit-area { margin-top: 32rpx; }
 .edit-actions { margin-top: 24rpx; display: flex; gap: 16rpx; }
 .actions { margin: 24rpx; display: flex; flex-direction: column; gap: 16rpx; }

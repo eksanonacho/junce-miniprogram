@@ -19,6 +19,8 @@ import { ManualDashboardModule } from './manual-dashboard/manual-dashboard.modul
 import { PermissionsModule } from './permissions/permissions.module';
 import { WorkbenchModule } from './workbench/workbench.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CustomerLifecycleModule } from './customer-lifecycle/customer-lifecycle.module';
+import { AccountingWorkLogsModule } from './accounting-work-logs/accounting-work-logs.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -46,6 +48,8 @@ import { AppService } from './app.service';
     PermissionsModule,
     WorkbenchModule,
     NotificationsModule,
+    CustomerLifecycleModule,
+    AccountingWorkLogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

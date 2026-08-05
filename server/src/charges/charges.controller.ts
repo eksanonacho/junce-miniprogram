@@ -85,7 +85,10 @@ export class ChargesController {
 
   // GET /charges/:id/reminders
   @Get(':id/reminders')
-  async findReminders(@Param('id', ParseIntPipe) id: number) {
-    return this.chargesService.findReminders(id);
+  async findReminders(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.chargesService.findReminders(id, req.user as AuthUser);
   }
 }

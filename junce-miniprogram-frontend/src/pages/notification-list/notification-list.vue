@@ -95,6 +95,7 @@ async function handleClick(item) {
       tenant: `/pages/tenant-detail/tenant-detail?id=${item.targetId}`,
       fission: `/pages/fission-detail/fission-detail?id=${item.targetId}`,
       customer: `/pages/customer-detail/customer-detail?id=${item.targetId}`,
+      accounting_log: '/pages/accounting-work-log/accounting-work-log',
     }
     const url = pathMap[item.targetType]
     if (url) {
@@ -184,6 +185,8 @@ function formatTime(val) {
 .notify-dot--charge { background: var(--jc-color-status-error); }
 .notify-dot--tenant { background: var(--jc-color-status-success); }
 .notify-dot--fission { background: var(--jc-color-status-warning); }
+.notify-dot--customer_intake { background: var(--jc-color-primary); }
+.notify-dot--accounting_log { background: var(--jc-color-tertiary, #085ea2); }
 .notify-dot--system { background: var(--jc-color-on-surface-variant); }
 
 .notify-item__body {

@@ -133,6 +133,12 @@
 			}
 		},
 		{
+			"path": "pages/accounting-work-log/accounting-work-log",
+			"style": {
+				"navigationBarTitleText": "会计日常台账"
+			}
+		},
+		{
 			"path": "pages/dashboard/dashboard",
 			"style": {
 				"navigationBarTitleText": "数据看板"
